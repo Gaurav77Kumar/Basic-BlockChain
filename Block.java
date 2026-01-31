@@ -1,6 +1,5 @@
 import java.util.Date;
 
-
 public class Block {
 
     public String hash;
@@ -14,7 +13,7 @@ public class Block {
     public Block(String data, String previoushash){
         this.data = data;
         this.previousHash = previoushash;
-        this.timeStamp = new Date().getTime();     // this will create a timestamp for us like 13121 that is helpful to us
+        this.timeStamp = new Date().getTime();
         this.hash = calculateHash();
     }
 
@@ -22,7 +21,7 @@ public class Block {
         String calculatehash = StringUtil.applySha256(
                 previousHash +
                         Long.toString(timeStamp) +
-                        Integer.toString(nonce) + // You MUST add this!
+                        Integer.toString(nonce) +
                         data
         );
         return calculatehash;

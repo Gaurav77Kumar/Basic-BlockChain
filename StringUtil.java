@@ -1,7 +1,7 @@
 import java.security.MessageDigest;
 
 public class StringUtil {
-    // Changed to a static method that takes a String and returns a String
+
     public static String applySha256(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
