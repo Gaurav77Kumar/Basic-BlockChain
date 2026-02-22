@@ -1,19 +1,22 @@
 import java.util.Date;
+import java.util.ArrayList;
 
 public class Block {
 
     public String hash;
     public String previousHash;
-    private String data;               // our data will be a simple message.
-    private long timeStamp;            // as number of milliseconds since 1/1/1970
+    public String merkleRoot;
+    public ArrayList<Transaction> transactions = new ArrayList<Transaction>();
+
+    private long timeStamp;
 
     private int nonce;
 
     // Block Constructor.
-    public Block(String data, String previoushash){
-        this.data = data;
+    public Block( String previoushash){
         this.previousHash = previoushash;
         this.timeStamp = new Date().getTime();
+
         this.hash = calculateHash();
     }
 
@@ -22,7 +25,7 @@ public class Block {
                 previousHash +
                         Long.toString(timeStamp) +
                         Integer.toString(nonce) +
-                        data
+                       merkleRoot
         );
         return calculatehash;
     }
@@ -36,5 +39,21 @@ public class Block {
         System.out.println("Block Mined!!! : " + hash);
     }
 
-}
+    // Add transactions to this block
+    public boolean addTransaction(Transaction transaction){
+        // Process transaction and check if valid, unless block is genesis block then ignore.
 
+        if(transaction == null) return false;
+        if((previousHash != "0")) {
+
+            if((transaction.processTransaction() != true)) {
+                System.out.println("Transaction failed to process. Discarded.");
+                return false;
+            }
+        }
+        transactions.add(transaction);
+        System.out.println("Transaction Successfully added to Block");
+        return true;
+    }
+
+}
