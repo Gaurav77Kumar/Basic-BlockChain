@@ -1,43 +1,111 @@
-# ⛓️ Java-Blockchain
+# ⛓️ Java-Blockchain (UTXO + Wallet + Mining)
 
 <p align="center">
   <img src="https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=java&logoColor=white" />
   <img src="https://img.shields.io/badge/GSON-2.10.1-47A248?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Blockchain-Security-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/BouncyCastle-ECDSA-orange?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Blockchain-Proof--of--Work-blue?style=for-the-badge" />
 </p>
 
 ---
 
-A lightweight, secure implementation of a blockchain structure in Java. This project demonstrates how digital ledgers maintain integrity using cryptographic hashing and Proof of Work (Mining).
+# 📌 Overview
+
+A Java-based blockchain engine implementing UTXO transaction model, SHA-256 hashing, ECDSA signatures, and proof-of-work consensus.
+Simulates real-world blockchain architecture with full transaction and chain validation.
+
+- 🔐 Public/Private Key Wallets (ECDSA)
+- ✍️ Digital Signatures
+- 💰 UTXO-based Transaction Model
+- ⛏️ Proof-of-Work Mining
+- 🧱 Hash-linked Blocks
+- 🔎 Full Blockchain Validation
+- 📦 JSON Serialization using GSON
 
 ---
 
-### 🌟 Features
-* **SHA-256 Hashing:** Generates unique digital fingerprints for every block.
-* **Proof of Work (Mining):** Implements a `nonce` system with adjustable difficulty to simulate real mining.
-* **Tamper Protection:** Built-in validation logic to detect any unauthorized changes to the chain.
-* **JSON Serialization:** Integration with the **GSON library** for beautiful, readable data output.
+# 🧠 Core Concepts Implemented
+
+## 🔐 Wallets & Cryptography
+- ECDSA key pair generation using BouncyCastle
+- Private key signing
+- Public key verification
+- Base64 key encoding
+
+## 💰 UTXO Model
+- Unspent Transaction Outputs (like Bitcoin)
+- Dynamic balance calculation
+- Double-spending prevention
+- Input-output equality validation
+
+## ⛏️ Mining (Proof of Work)
+- Nonce-based hash solving
+- Adjustable difficulty
+- SHA-256 hashing
+- Block integrity enforcement
+
+## 🔎 Blockchain Validation
+- Previous hash verification
+- Block hash recalculation check
+- Signature verification
+- UTXO reference validation
 
 ---
 
-### 📋 Prerequisites
-Before running this project, ensure you have:
-* **Java Development Kit (JDK):** Version 8 or higher.
-* **IntelliJ IDEA:** (Or any Java IDE).
-* **GSON Library:** You must add the GSON `.jar` to your project dependencies to handle JSON formatting.
+# 🏗️ System Architecture
+
+```
+Wallet → Create Transaction → Sign → Add to Block → Mine → Add to Chain → Validate
+```
+
+### Layered Design
+
+```
+             ┌────────────────────┐
+             │        GUI         │  
+             └─────────▲──────────┘
+                       │
+             ┌─────────┴──────────┐
+             │   Blockchain App   │
+             └─────────▲──────────┘
+                       │
+      ┌────────────────┼────────────────┐
+      │                │                │
+ ┌────┴────┐     ┌─────┴─────┐     ┌────┴────┐
+ │ Wallet  │     │ Transaction│     │  Block  │
+ └────▲────┘     └─────▲─────┘     └────▲────┘
+      │                │                │
+      └────────────────┴────────────────┘
+                       │
+               ┌───────┴────────┐
+               │   StringUtil   │
+               │ (Crypto Layer) │
+               └────────────────┘
+```
 
 ---
 
-### ⚙️ How It Works
-The security of this blockchain relies on three main pillars:
+# 📦 Project Structure
 
-1.  **The Hash:** Each block creates a hash based on its `Data`, `Timestamp`, `Nonce`, and the `Previous Hash`.
-2.  **The Chain:** Because Block B contains the hash of Block A, they are mathematically "linked." If Block A's data is changed, its hash changes, and the entire chain becomes invalid.
-3.  **The Mine:** To add a block, the computer must solve a "puzzle"—finding a hash that starts with a specific number of `0`s (defined by the `difficulty` variable).
+```
+src/
+    ├── README.md
+    ├── Block.java
+    ├── Wallet.java
+    ├── NoobGUI.java
+    ├── StringUtil.java
+    ├── Transaction.java
+    ├── TransactionInput.java
+    └── TransactionOutput.java
 
-
-
+```
 ---
+
+# ⚙️ Requirements
+
+- Java (JDK 8+)
+- GSON (2.10.1)
+- BouncyCastle (bcprov-jdk15on)
 
 ### 🚀 How to Run
 
@@ -50,5 +118,18 @@ The security of this blockchain relies on three main pillars:
     * Add the GSON library (Maven: `com.google.code.gson:gson:2.10.1`).
 4.  **Execute:** Run the `Noob.java` file.
 
+## 📸 Output
+
+<p align="center">
+  <img src="assets/console-ouput.png" width="800" alt=""/>
+</p>
+
 ---
+
+
+
+
+
+
+
 
