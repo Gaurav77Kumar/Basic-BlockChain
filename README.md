@@ -43,7 +43,7 @@ The security of this blockchain relies on three main pillars:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git)
+    git clone https://github.com/Gaurav77Kumar/Basic-BlockChain
     ```
 2.  **Import to IntelliJ:** Open the folder as a new project.
 3.  **Add GSON:** * Go to `File` > `Project Structure` > `Libraries`.
