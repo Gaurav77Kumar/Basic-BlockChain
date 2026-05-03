@@ -1,3 +1,4 @@
+import java.sql.SQLOutput;
 import java.util.ArrayList;
 import java.security.Security;
 import java.util.HashMap;
@@ -12,10 +13,12 @@ public class Noob {
     public static ArrayList<Transaction> mempool = new ArrayList<Transaction>();  // we are using mempool for unconfirmed transaction
 
 
-    public static int difficulty = 1;
+    public static int difficulty = 3;
     public static float minimumTransaction = 0.1f;
-
    public static float miningReward = 10f;
+
+   public static int retargetInterval = 3;       // recalculate difficulty every 3 blocks
+   public static long targetBlockTimeMs = 2000;  // target block time in miliseconds
 
 
     public static Wallet walletA;
@@ -54,6 +57,7 @@ public class Noob {
         System.out.println("\n WalletA send 40 to walletB..");
         walletA.sendFunds(walletB.publicKey, 40f);
 
+
         // WalletA mines earn 10 coin reward automatically
         System.out.println("\nWalletA mines block 1 earn reward..");
         Block block1 = mineNextBlock(genesis.hash, walletA);
@@ -71,7 +75,17 @@ public class Noob {
         System.out.println("\nWalletA balance: " + walletA.getBalance());
         System.out.println("\nWalletB balance: " + walletB.getBalance());
 
+        System.out.println("\nWalletA send 40 to walletB");
+        walletA.sendFunds(walletB.publicKey, 40f);
+        Block b1 = mineNextBlock(blockchain.get(blockchain.size() - 1).hash, walletA);
 
+        System.out.println("\nWalletB send 10 to walletA");
+        walletB.sendFunds(walletB.publicKey,10f);
+        Block b2 = mineNextBlock(blockchain.get(blockchain.size() - 1).hash, walletB);
+
+        System.out.println("Final balance");
+        System.out.println("\nWalletA balance: " + walletA.getBalance());
+        System.out.println("\nWalletB balance: " + walletB.getBalance());
 
         isChainValid();
     }
@@ -98,6 +112,7 @@ public class Noob {
 
     // Miner drains mempool into new block and mines it
     public static Block mineNextBlock(String previousHash, Wallet miner) {
+
         Block block = new Block(previousHash);
 
         // coinbase is te first transaction in real bitcoin
@@ -125,7 +140,7 @@ public class Noob {
 
         Block currentBlock;
         Block previousBlock;
-        String hashTarget = new String(new char[difficulty]).replace('\0', '0');
+
         HashMap<String, TransactionOutput> tempUTXOs = new HashMap<String, TransactionOutput>();
         tempUTXOs.put(genesisTransaction.outputs.get(0).id, genesisTransaction.outputs.get(0));
 
@@ -144,8 +159,9 @@ public class Noob {
                 System.out.println("Previous Hashes not equal");
                 return false;
             }
-            //check if hash is solved
-            if (!currentBlock.hash.substring(0, difficulty).equals(hashTarget)) {
+
+            String hashTarget = new String(new char[currentBlock.difficulty]).replace('\0', '0');
+            if (!currentBlock.hash.substring(0,currentBlock.difficulty).equals(hashTarget)) {
                 System.out.println("This block hasn't been mined");
                 return false;
             }
@@ -201,5 +217,34 @@ public class Noob {
     private static void addBlock(Block newBlock)  {
         newBlock.mineBlock(difficulty);
         blockchain.add(newBlock);
+        adjustDifficulty();
+    }
+
+    public static void adjustDifficulty(){
+        int chainSize = blockchain.size();
+
+        if(chainSize == 0 || chainSize % retargetInterval != 0) return; // Only retarget at interval Boundary
+        Block latest = blockchain.get(chainSize - 1);
+        Block reference = blockchain.get(chainSize - retargetInterval);
+
+        long actualTimeMs = latest.timeStamp - reference.timeStamp;
+        long expectedTimeMs = targetBlockTimeMs * retargetInterval;
+
+        System.out.println("Expected time: " + expectedTimeMs + "ms");
+        System.out.println("Actual time: " + actualTimeMs + "ms");
+
+        if(actualTimeMs < expectedTimeMs /2){
+            // mining too fast increase difficulty
+            difficulty++;
+            System.out.println("Blocked mined too fast > diffulcty increase to: "+ difficulty);
+        } else if(actualTimeMs > expectedTimeMs * 2){
+            //Mining too slow decraese difficulty
+            difficulty = Math.max(1, difficulty -1);
+            System.out.println("Blocked mined too slow > diffulcty decrease to: "+ difficulty);
+        } else{
+            System.out.println("Blocked mined within acceptable time > diffulcty stays the same"+ difficulty);
+        }
+
+
     }
 }

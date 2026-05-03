@@ -7,6 +7,7 @@ public class Block {
     public String previousHash;
     public String merkleRoot;
     public ArrayList<Transaction> transactions = new ArrayList<Transaction>();
+    public int difficulty;
 
     public  long timeStamp;
     private int nonce;
@@ -30,6 +31,7 @@ public class Block {
     }
 
     public void mineBlock(int difficulty) {
+        this.difficulty = difficulty;
         String target = new String(new char[difficulty]).replace('\0', '0');
         while (!hash.substring(0, difficulty).equals(target)) {
             nonce++;
