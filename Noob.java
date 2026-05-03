@@ -1,32 +1,36 @@
 import java.util.ArrayList;
 import java.security.Security;
 import java.util.HashMap;
-
-
+import javax.swing.SwingUtilities;
+import java.security.PublicKey;
 
 public class Noob {
 
     public static ArrayList<Block> blockchain = new ArrayList<Block>();
     public static HashMap<String, TransactionOutput> UTXOs = new HashMap<String, TransactionOutput>(); //list of all unspent transactions.
 
+    public static ArrayList<Transaction> mempool = new ArrayList<Transaction>();  // we are using mempool for unconfirmed transaction
+
 
     public static int difficulty = 1;
     public static float minimumTransaction = 0.1f;
+
+
+
+
     public static Wallet walletA;
     public static Wallet walletB;
     public static Transaction genesisTransaction;
 
     public static void main(String[] args) {
-        // Setup Bouncey castle as Security Provider
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
 
         // Create the new wallets
         walletA = new Wallet();
         walletB = new Wallet();
-        new NoobGUI();
         Wallet coinbase = new Wallet();
 
-        System.out.println("coinbase key:" + coinbase.publicKey);
+        System.out.println("Coinbase key:" + coinbase.publicKey);
         System.out.println("walletA key: " + walletA.publicKey);
 
         // Create genesis transaction, which sends 100 NoobCoin to walletA;
@@ -35,41 +39,67 @@ public class Noob {
         genesisTransaction.transactionId = "0"; // manually set the transaction id
 
         genesisTransaction.outputs.add(new TransactionOutput(genesisTransaction.recipient, genesisTransaction.value, genesisTransaction.transactionId)); // manually add the Transactions Output
-        UTXOs.put(genesisTransaction.outputs.get(0).id, genesisTransaction.outputs.get(0)); // its important to store our first
+        UTXOs.put(genesisTransaction.outputs.get(0).id, genesisTransaction.outputs.get(0));
 
         System.out.println("Creating and Mining Genesis block... ");
         Block genesis = new Block("0");
         genesis.addTransaction(genesisTransaction);
         addBlock(genesis);
 
-        // Testing
-        Block block1 = new Block(genesis.hash);
-        System.out.println("\nWalletA's balance is: " + walletA.getBalance());
+        SwingUtilities.invokeLater(Dashboard::new);
+
+        // Wallet submit to mempool
+        System.out.println("\nWalletA balance: " + walletA.getBalance());
+
         System.out.println("\nWalletA is Attempting to send funds (40) to WalletB...");
-        block1.addTransaction(walletA.sendFunds(walletB.publicKey, 40f));
-        addBlock(block1);
-        System.out.println("\nWalletA's balance is: " + walletA.getBalance());
-        System.out.println("WalletB's balance is: " + walletB.getBalance());
+        walletA.sendFunds(walletB.publicKey, 40f);
+        System.out.println("Mempool size: " + mempool.size());
 
-        Block block2 = new Block(genesis.hash);
+        System.out.println("\nMining block 1(drain mempool)..");
+        Block block1 = mineNextBlock(genesis.hash);
+
+        System.out.println("\nWalletA balance: " + walletA.getBalance());
+        System.out.println("WalletB balance: " + walletB.getBalance());
+
         System.out.println("\nWalletA Attempting to send more funds (1000) than it has...");
-        block2.addTransaction(walletA.sendFunds(walletB.publicKey, 1000f));
-        addBlock(block2);
-        System.out.println("\nWalletA's balance is: " + walletA.getBalance());
-        System.out.println("WalletB's balance is: " + walletB.getBalance());
+        walletA.sendFunds(walletB.publicKey, 1000f);
+        System.out.println("\nMempool size: " + mempool.size());
 
-        Block block3 = new Block(genesis.hash);
-        System.out.println("\nWalletB is Attempting to send funds (20) to WalletA...");
-        block3.addTransaction(walletB.sendFunds( walletA.publicKey, 20));
-        addBlock(block3);
-        System.out.println("\nWalletA's balance is: " + walletA.getBalance());
-        System.out.println("WalletB's balance is: " + walletB.getBalance());
+        System.out.println("\nWalletB Submitting 20 coins to mempool>>");
+        walletB.sendFunds(walletA.publicKey, 20f);
 
+        System.out.println("\nMining block 2>>");
+        Block block2 = mineNextBlock(block1.hash);
 
+        System.out.println("\nWalletA balance: " + walletA.getBalance());
+        System.out.println("WalletB balance: " + walletB.getBalance());
+
+        isChainValid();
+    }
+
+    // Miner drains mempool into new block and mines it
+    public static Block mineNextBlock(String previousHash) {
+        Block block = new Block(previousHash);
+
+        if (mempool.isEmpty()) {
+            System.out.println("Mempool is empty nothing to mine");
+            return null;
+        }
+
+        // pulling every pending transaction into this block
+        for (Transaction tx : mempool) {
+            block.addTransaction(tx);
+        }
+        mempool.clear();   // Empty the waiting room
+        addBlock(block);
+
+        System.out.println("Block mined with " + block.transactions.size() + " transactions(s)");
+        return block;
     }
 
 
     public static Boolean isChainValid() {
+
         Block currentBlock;
         Block previousBlock;
         String hashTarget = new String(new char[difficulty]).replace('\0', '0');

@@ -8,11 +8,10 @@ public class Block {
     public String merkleRoot;
     public ArrayList<Transaction> transactions = new ArrayList<Transaction>();
 
-    private long timeStamp;
-
+    public  long timeStamp;
     private int nonce;
 
-    // Block Constructor.
+    // Block Constructor
     public Block( String previoushash){
         this.previousHash = previoushash;
         this.timeStamp = new Date().getTime();
@@ -31,7 +30,7 @@ public class Block {
     }
 
     public void mineBlock(int difficulty) {
-        String target = new String(new char[difficulty]).replace('\0', '0'); //Create a string with difficulty * "0"
+        String target = new String(new char[difficulty]).replace('\0', '0');
         while (!hash.substring(0, difficulty).equals(target)) {
             nonce++;
             hash = calculateHash();
@@ -44,14 +43,15 @@ public class Block {
         // Process transaction and check if valid, unless block is genesis block then ignore.
 
         if(transaction == null) return false;
-        if((previousHash != "0")) {
+        if((!previousHash.equals("0"))) {
 
-            if((transaction.processTransaction() != true)) {
+            if((!transaction.processTransaction())) {
                 System.out.println("Transaction failed to process. Discarded.");
                 return false;
             }
         }
         transactions.add(transaction);
+        merkleRoot = Transaction.getMerkleRoot(transactions);
         System.out.println("Transaction Successfully added to Block");
         return true;
     }

@@ -23,8 +23,7 @@ public class Transaction {
 
     // This will generate the transaction hash (which will be used as its id)
     private String calculateHash() {
-        sequence++;                    // increase the sequence to avoid 2 identical transactions having the same hash
-
+        sequence++;
         return StringUtil.applySha256(
                 StringUtil.getStringFromKey(sender) +
                         StringUtil.getStringFromKey(recipient) +

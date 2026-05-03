@@ -6,7 +6,6 @@ import java.util.Base64;
 import java.security.PublicKey;
 
 public class StringUtil {
-
     public static String applySha256(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -15,8 +14,8 @@ public class StringUtil {
             byte[] hash = digest.digest(input.getBytes("UTF-8"));
             StringBuilder hexString = new StringBuilder();                   // StringBuilder is slightly faster than StringBuffer
 
-            for (int i = 0; i < hash.length; i++) {
-                String hex = Integer.toHexString(0xff & hash[i]);
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
                 if (hex.length() == 1) hexString.append('0');
                 hexString.append(hex);
             }

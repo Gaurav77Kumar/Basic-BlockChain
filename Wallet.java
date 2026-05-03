@@ -26,7 +26,6 @@ public class Wallet {
             // Initialize the key generator and generate a keyPair
             keyGen.initialize(ecSpec, random);
             // Set the public and private keys from the keypair
-
             KeyPair keyPair = keyGen.generateKeyPair();
             privateKey = keyPair.getPrivate();
             publicKey = keyPair.getPublic();
@@ -67,12 +66,14 @@ public class Wallet {
             if(total > value) break;
         }
 
-        Transaction newTransaction = new Transaction(publicKey,_recipient,value,inputs);
+        Transaction newTransaction = new Transaction(publicKey, _recipient, value, inputs);
         newTransaction.generateSignature(privateKey);
 
         for(TransactionInput input: inputs){
             UTX0s.remove(input.transactionOutputId);
         }
+        Noob.mempool.add(newTransaction);
+        System.out.println("Transaction submitted to mempool. pending: " + Noob.mempool.size());
         return newTransaction;
     }
 
