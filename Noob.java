@@ -15,7 +15,7 @@ public class Noob {
     public static int difficulty = 1;
     public static float minimumTransaction = 0.1f;
 
-
+   public static float miningReward = 10f;
 
 
     public static Wallet walletA;
@@ -48,38 +48,61 @@ public class Noob {
 
         SwingUtilities.invokeLater(Dashboard::new);
 
-        // Wallet submit to mempool
-        System.out.println("\nWalletA balance: " + walletA.getBalance());
+       // WalletA is miner now they will earn rewards for mining the block
+        System.out.println("\n WalletA balance: " + walletA.getBalance());
 
-        System.out.println("\nWalletA is Attempting to send funds (40) to WalletB...");
+        System.out.println("\n WalletA send 40 to walletB..");
         walletA.sendFunds(walletB.publicKey, 40f);
-        System.out.println("Mempool size: " + mempool.size());
 
-        System.out.println("\nMining block 1(drain mempool)..");
-        Block block1 = mineNextBlock(genesis.hash);
+        // WalletA mines earn 10 coin reward automatically
+        System.out.println("\nWalletA mines block 1 earn reward..");
+        Block block1 = mineNextBlock(genesis.hash, walletA);
 
-        System.out.println("\nWalletA balance: " + walletA.getBalance());
-        System.out.println("WalletB balance: " + walletB.getBalance());
+        System.out.println("\n WalletA balance: " + walletA.getBalance());
+        System.out.println("\n WalletB balance: " + walletB.getBalance());
 
-        System.out.println("\nWalletA Attempting to send more funds (1000) than it has...");
-        walletA.sendFunds(walletB.publicKey, 1000f);
-        System.out.println("\nMempool size: " + mempool.size());
-
-        System.out.println("\nWalletB Submitting 20 coins to mempool>>");
+        System.out.println("\nWalletB send 20 to walletA..");
         walletB.sendFunds(walletA.publicKey, 20f);
 
-        System.out.println("\nMining block 2>>");
-        Block block2 = mineNextBlock(block1.hash);
+        // walletB mines block 2 earn 10 coins
+        System.out.println("\nWalletB mines block 2 earn reward..");
+        Block block2 = mineNextBlock(block1.hash, walletB);
 
         System.out.println("\nWalletA balance: " + walletA.getBalance());
-        System.out.println("WalletB balance: " + walletB.getBalance());
+        System.out.println("\nWalletB balance: " + walletB.getBalance());
+
+
 
         isChainValid();
     }
 
+    // Creating a new coinbase transaction no inputs creating coins from nothing and sending to miner
+    public static Transaction createCoinbaseTx(Wallet miner){
+        Transaction coinbaseTx = new Transaction(null,miner.publicKey, miningReward, new ArrayList<>());
+
+        coinbaseTx.transactionId = StringUtil.applySha256(
+                "COINBASE"+ miner.publicKey.toString() + System.currentTimeMillis()
+        );
+
+        TransactionOutput out = new TransactionOutput(
+                miner.publicKey,
+                miningReward,
+                coinbaseTx.transactionId
+        );
+        coinbaseTx.outputs.add(out);
+        UTXOs.put(out.id,out);
+
+        System.out.println("Coinbase reward: " + miningReward + "coins> miner");
+        return coinbaseTx;
+    }
+
     // Miner drains mempool into new block and mines it
-    public static Block mineNextBlock(String previousHash) {
+    public static Block mineNextBlock(String previousHash, Wallet miner) {
         Block block = new Block(previousHash);
+
+        // coinbase is te first transaction in real bitcoin
+        Transaction coinbase = createCoinbaseTx(miner);
+        block.addCoinbase(coinbase);
 
         if (mempool.isEmpty()) {
             System.out.println("Mempool is empty nothing to mine");
@@ -129,6 +152,13 @@ public class Noob {
             TransactionOutput tempOutput;
             for (int t = 0; t < currentBlock.transactions.size(); t++) {
                 Transaction currentTransaction = currentBlock.transactions.get(t);
+
+                if(t == 0 && currentTransaction.sender == null){
+                    for(TransactionOutput output: currentTransaction.outputs){
+                        tempUTXOs.put(output.id, output);
+                    }
+                    continue;
+                }
 
                 if (!currentTransaction.verifySignature()) {
                     System.out.println("Signature on Transaction(" + t + ") is Invalid");

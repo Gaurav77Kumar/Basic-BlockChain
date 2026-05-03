@@ -38,6 +38,13 @@ public class Block {
         System.out.println("Block Mined!!! : " + hash);
     }
 
+    public void addCoinbase(Transaction coinbase){
+        transactions.add(coinbase);
+        merkleRoot = Transaction.getMerkleRoot(transactions);
+        System.out.println("Coinbase transaction added to block");
+
+    }
+
     // Add transactions to this block
     public boolean addTransaction(Transaction transaction){
         // Process transaction and check if valid, unless block is genesis block then ignore.
