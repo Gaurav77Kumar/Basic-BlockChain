@@ -6,7 +6,8 @@ public class Transaction {
     public String transactionId;       // This is also the hash of the transaction
     public PublicKey sender;           // Senders address/public key
     public PublicKey recipient;        // Recipients address/public key
-    public float value;                // Contains the amount we wish to send to the recipient
+    public long value;                // Contains the amount we wish to send to the recipient
+    public long fee;                  // Contains the fee we wish to pay to the miner for processing our transaction. Fee is optional and can be zero.
     public byte[] signature;           // This is to prevent anybody else from spending funds in our
 
     public ArrayList<TransactionInput> inputs = new ArrayList<TransactionInput>();       // List of transaction inputs
@@ -14,11 +15,12 @@ public class Transaction {
 
     private static int sequence = 0;      // A rough count of how many transactions have been generated
 
-    public Transaction(PublicKey from, PublicKey to, float value, ArrayList<TransactionInput> inputs) {
+    public Transaction(PublicKey from, PublicKey to, long value,long fee, ArrayList<TransactionInput> inputs) {
         this.sender = from;
         this.recipient = to;
         this.value = value;
         this.inputs = inputs;
+        this.fee = fee;
     }
 
     // This will generate the transaction hash (which will be used as its id)
@@ -27,13 +29,17 @@ public class Transaction {
         return StringUtil.applySha256(
                 StringUtil.getStringFromKey(sender) +
                         StringUtil.getStringFromKey(recipient) +
-                        Float.toString(value) + sequence
+                        Long.toString(value) +
+                        Long.toString(fee)+
+                        sequence
         );
     }
 
     // Signs all the data we don't wish to be tampered with.
     public void generateSignature(PrivateKey privateKey) {
-        String data = StringUtil.getStringFromKey(sender ) + StringUtil.getStringFromKey(recipient) + Float.toString(value);
+        String data = StringUtil.getStringFromKey(sender ) + StringUtil.getStringFromKey(recipient) +
+                Long.toString(value) +
+                Long.toString(fee);
         signature = StringUtil.applyECDSASig(privateKey, data);
     }
 
@@ -43,7 +49,9 @@ public class Transaction {
         if(sender == null) return true;
         String data = StringUtil.getStringFromKey(sender )
                      + StringUtil.getStringFromKey(recipient)
-                     + Float.toString(value);
+                     + Long.toString(value)
+                     + Long.toString(fee);
+
         return StringUtil.verifyECDSASig(sender,data, signature);
     }
 
@@ -62,12 +70,17 @@ public class Transaction {
 
         // Check if transaction is valid:
         if(getInputsValue() < Noob.minimumTransaction) {
-            System.out.println("#Transaction Inputs too small: " + getInputsValue());
+            System.out.println("#Transaction Inputs too small: " + StringUtil.toCoins((long) getInputsValue()));
             return false;
         }
 
         // Generate transaction outputs:
-        float leftOver = getInputsValue() - value; // get value of inputs then the left over change:
+        long leftOver = (long) (getInputsValue() - value -fee); // get value of inputs then the left over change:
+
+        if(leftOver < 0){
+            System.out.println("Insufficient funds to cover value + fee");
+            return false;
+        }
         transactionId = calculateHash();
         outputs.add(new TransactionOutput( this.recipient, value,transactionId)); // send value to recipient
         outputs.add(new TransactionOutput( this.sender, leftOver,transactionId)); // send the left over 'change' back to sender
@@ -87,8 +100,8 @@ public class Transaction {
     }
 
     // returns sum of inputs(UTXOs) values
-    public float getInputsValue() {
-        float total = 0;
+    public long getInputsValue() {
+        long total = 0;
         for (TransactionInput i : inputs) {
             if (i.UTXO == null) continue; //if Transaction can't be found skip it
             total += i.UTXO.value;
@@ -97,12 +110,17 @@ public class Transaction {
     }
 
     // returns sum of inputs(UTXOs) values
-    public float getOutputsValue() {
-        float total = 0;
+    public long getOutputsValue() {
+        long total = 0;
         for (TransactionOutput o : outputs) {
             total += o.value;
         }
         return total;
+    }
+
+    // Fee = what inputs put in minus what output take out
+    public long getActualFee(){
+        return getInputsValue() - getOutputsValue();
     }
 
     // Tacks in array of transactions and returns a merkle root.
@@ -117,8 +135,18 @@ public class Transaction {
 
         while(count > 1) {
             treeLayer = new ArrayList<String>();
-            for(int i=1; i < previousTreeLayer.size(); i++) {
-                treeLayer.add(StringUtil.applySha256(previousTreeLayer.get(i-1) + previousTreeLayer.get(i)));
+            for(int i = 0; i < previousTreeLayer.size(); i += 2) {
+
+                String left = previousTreeLayer.get(i);
+
+                String right;
+                if(i + 1 < previousTreeLayer.size()) {
+                    right = previousTreeLayer.get(i + 1);
+                } else {
+                    right = left; // duplicate last if odd
+                }
+
+                treeLayer.add(StringUtil.applySha256(left + right));
             }
             count = treeLayer.size();
             previousTreeLayer = treeLayer;

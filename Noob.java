@@ -14,8 +14,8 @@ public class Noob {
 
 
     public static int difficulty = 3;
-    public static float minimumTransaction = 0.1f;
-   public static float miningReward = 10f;
+    public static long minimumTransaction = 10_00000000L;
+   public static long miningReward = 1_000_000L;
 
    public static int retargetInterval = 3;       // recalculate difficulty every 3 blocks
    public static long targetBlockTimeMs = 2000;  // target block time in miliseconds
@@ -37,7 +37,7 @@ public class Noob {
         System.out.println("walletA key: " + walletA.publicKey);
 
         // Create genesis transaction, which sends 100 NoobCoin to walletA;
-        genesisTransaction = new Transaction(coinbase.publicKey, walletA.publicKey, 100f, null);
+        genesisTransaction = new Transaction(coinbase.publicKey, walletA.publicKey,100_00000000L , 0L,null);
         genesisTransaction.generateSignature(coinbase.privateKey);     // manually sign the genesis transaction
         genesisTransaction.transactionId = "0"; // manually set the transaction id
 
@@ -52,47 +52,47 @@ public class Noob {
         SwingUtilities.invokeLater(Dashboard::new);
 
        // WalletA is miner now they will earn rewards for mining the block
-        System.out.println("\n WalletA balance: " + walletA.getBalance());
+        System.out.println("\n WalletA balance: " + StringUtil.toCoins( walletA.getBalance()));
 
         System.out.println("\n WalletA send 40 to walletB..");
-        walletA.sendFunds(walletB.publicKey, 40f);
+        walletA.sendFunds(walletB.publicKey, 40_00000000L,50000000L);
 
 
         // WalletA mines earn 10 coin reward automatically
         System.out.println("\nWalletA mines block 1 earn reward..");
         Block block1 = mineNextBlock(genesis.hash, walletA);
 
-        System.out.println("\n WalletA balance: " + walletA.getBalance());
-        System.out.println("\n WalletB balance: " + walletB.getBalance());
+        System.out.println("\n WalletA balance: " + StringUtil.toCoins(walletA.getBalance()));
+        System.out.println("\n WalletB balance: " + StringUtil.toCoins(walletB.getBalance()));
 
         System.out.println("\nWalletB send 20 to walletA..");
-        walletB.sendFunds(walletA.publicKey, 20f);
+        walletB.sendFunds(walletA.publicKey, 20_00000000L, 50000000L);
 
         // walletB mines block 2 earn 10 coins
         System.out.println("\nWalletB mines block 2 earn reward..");
         Block block2 = mineNextBlock(block1.hash, walletB);
 
-        System.out.println("\nWalletA balance: " + walletA.getBalance());
-        System.out.println("\nWalletB balance: " + walletB.getBalance());
+        System.out.println("\nWalletA balance: " + StringUtil.toCoins(walletA.getBalance()));
+        System.out.println("\nWalletB balance: " + StringUtil.toCoins(walletB.getBalance()));
 
         System.out.println("\nWalletA send 40 to walletB");
-        walletA.sendFunds(walletB.publicKey, 40f);
+        walletA.sendFunds(walletB.publicKey, 40_00000000L, 50000000L);
         Block b1 = mineNextBlock(blockchain.get(blockchain.size() - 1).hash, walletA);
 
         System.out.println("\nWalletB send 10 to walletA");
-        walletB.sendFunds(walletB.publicKey,10f);
+        walletB.sendFunds(walletB.publicKey,10_00000000L, 50000000L);
         Block b2 = mineNextBlock(blockchain.get(blockchain.size() - 1).hash, walletB);
 
         System.out.println("Final balance");
-        System.out.println("\nWalletA balance: " + walletA.getBalance());
-        System.out.println("\nWalletB balance: " + walletB.getBalance());
+        System.out.println("\nWalletA balance: " + StringUtil.toCoins(walletA.getBalance()));
+        System.out.println("\nWalletB balance: " + StringUtil.toCoins(walletB.getBalance()));
 
         isChainValid();
     }
 
     // Creating a new coinbase transaction no inputs creating coins from nothing and sending to miner
-    public static Transaction createCoinbaseTx(Wallet miner){
-        Transaction coinbaseTx = new Transaction(null,miner.publicKey, miningReward, new ArrayList<>());
+    public static Transaction createCoinbaseTx(Wallet miner,long totalReward){
+        Transaction coinbaseTx = new Transaction(null,miner.publicKey, totalReward,0L, new ArrayList<>());
 
         coinbaseTx.transactionId = StringUtil.applySha256(
                 "COINBASE"+ miner.publicKey.toString() + System.currentTimeMillis()
@@ -115,8 +115,15 @@ public class Noob {
 
         Block block = new Block(previousHash);
 
-        // coinbase is te first transaction in real bitcoin
-        Transaction coinbase = createCoinbaseTx(miner);
+        // Step1: Sort mempool by fee descending-highest fee minded first
+        mempool.sort((a,b) -> Long.compare(b.fee,a.fee));
+
+        // Step2: Sum all fee from pending transaction
+        long totalFees = mempool.stream().mapToLong(tx -> tx.fee).sum();
+
+        // Step3: Coinbase = block reward + all fees collected
+        long totalReward = miningReward + totalFees;
+        Transaction coinbase = createCoinbaseTx(miner,totalReward);
         block.addCoinbase(coinbase);
 
         if (mempool.isEmpty()) {
@@ -167,25 +174,25 @@ public class Noob {
             }
             TransactionOutput tempOutput;
             for (int t = 0; t < currentBlock.transactions.size(); t++) {
-                Transaction currentTransaction = currentBlock.transactions.get(t);
+                Transaction tx = currentBlock.transactions.get(t);
 
-                if(t == 0 && currentTransaction.sender == null){
-                    for(TransactionOutput output: currentTransaction.outputs){
+                if(t == 0 && tx.sender == null){
+                    for(TransactionOutput output: tx.outputs){
                         tempUTXOs.put(output.id, output);
                     }
                     continue;
                 }
 
-                if (!currentTransaction.verifySignature()) {
+                if (!tx.verifySignature()) {
                     System.out.println("Signature on Transaction(" + t + ") is Invalid");
                     return false;
                 }
-                if (currentTransaction.getInputsValue() != currentTransaction.getOutputsValue()) {
+                if (tx.getInputsValue() != tx.getOutputsValue()+tx.fee) {
                     System.out.println("Inputs are not equal to outputs on Transaction(" + t + ")");
                     return false;
                 }
 
-                for (TransactionInput input : currentTransaction.inputs) {
+                for (TransactionInput input : tx.inputs) {
                     tempOutput = tempUTXOs.get(input.transactionOutputId);
 
                     if (tempOutput == null) {
@@ -201,10 +208,10 @@ public class Noob {
                     tempUTXOs.remove(input.transactionOutputId);
                 }
 
-                for (TransactionOutput output : currentTransaction.outputs) {
+                for (TransactionOutput output : tx.outputs) {
                     tempUTXOs.put(output.id, output);
                 }
-                if (currentTransaction.outputs.get(0).recipient != currentTransaction.recipient) {
+                if (tx.outputs.get(0).recipient != tx.recipient) {
                     System.out.println("Transaction(" + t + ") output recipient is not who it should be");
                     return false;
                 }

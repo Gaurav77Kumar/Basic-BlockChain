@@ -176,7 +176,7 @@ public class Dashboard {
             String recipientName = aToB ? "B" : "A";
 
             // sendFunds() now auto-submits to mempool
-            Transaction tx = sender.sendFunds(recipient.publicKey, amount);
+            Transaction tx = sender.sendFunds(recipient.publicKey, (long)(amount * 100), (long)(Noob.miningReward * 10)); // fee = 10x reward for demo purposes
 
             if (tx == null) {
                 showError("Insufficient funds — Wallet " + senderName + " has "
@@ -249,8 +249,8 @@ public class Dashboard {
 
     private void refreshAll() {
         // Balances
-        String a = Noob.walletA != null ? String.format("%.2f", Noob.walletA.getBalance()) : "—";
-        String b = Noob.walletB != null ? String.format("%.2f", Noob.walletB.getBalance()) : "—";
+        String a = Noob.walletA != null ? StringUtil.toCoins(Noob.walletA.getBalance()): "-";
+        String b = Noob.walletB != null ? StringUtil.toCoins(Noob.walletB.getBalance()) : "—";
         walletABalanceLabel.setText(balanceHtml(a));
         walletBBalanceLabel.setText(balanceHtml(b));
 
@@ -258,7 +258,7 @@ public class Dashboard {
         mempoolLabel.setText(String.valueOf(Noob.mempool.size()));
         difficultyLabel.setText(String.valueOf(Noob.difficulty));
         blockHeightLabel.setText(String.valueOf(Noob.blockchain.size() - 1)); // 0-indexed
-        rewardLabel.setText(String.format("%.0f", Noob.miningReward));
+        rewardLabel.setText(StringUtil.toCoins(Noob.miningReward));
     }
 
     private void log(String tag, String msg) {

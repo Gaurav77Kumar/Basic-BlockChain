@@ -59,4 +59,11 @@ public class StringUtil {
         return Base64.getEncoder().encodeToString(key.getEncoded());
     }
 
+    // Convert satoshis to display String
+    // 100000000 satoshs = 1 noobCoins
+    public static String toCoins(long satoshis){
+        return String.format("%.8f", satoshis/100000000.0);
+    }
+
+
 }

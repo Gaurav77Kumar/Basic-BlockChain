@@ -35,8 +35,8 @@ public class Wallet {
     }
 
     // Return balance and stores the UTX0s owned by this wallet in this
-    public float getBalance() {
-        float total = 0;
+    public long getBalance() {
+        long total = 0;
 
         for(Map.Entry<String, TransactionOutput> item: Noob.UTXOs.entrySet()){
             TransactionOutput UTX0 = item.getValue();
@@ -49,31 +49,38 @@ public class Wallet {
     }
 
     // Generates and returns a new transaction from this wallet.
-    public Transaction sendFunds(PublicKey _recipient, float value ) {
-        if(getBalance() < value) {    // gather balance and check funds
-            System.out.println("#Not Enough funds to send transaction. Transaction Discarded.");
+    public Transaction sendFunds(PublicKey _recipient, long value,long fee ) {
+        long totalNeeded = value + fee; // sender pay both
+        if(getBalance() < totalNeeded) {    // gather balance and check funds
+            System.out.println("#Not Enough funds to send transaction."+
+                    StringUtil.toCoins(getBalance()) +
+                    " Need"+ StringUtil.toCoins(totalNeeded)
+                    );
             return null;
         }
 
         // Create array list of inputs
         ArrayList<TransactionInput> inputs = new ArrayList<TransactionInput>();
-        float total = 0;
+        long total = 0;
 
         for (Map.Entry<String, TransactionOutput> item: UTX0s.entrySet()){
             TransactionOutput UTX0 = item.getValue();
             total += UTX0.value;
             inputs.add(new TransactionInput(UTX0.id));
-            if(total > value) break;
+            if(total > totalNeeded) break;
         }
 
-        Transaction newTransaction = new Transaction(publicKey, _recipient, value, inputs);
+        Transaction newTransaction = new Transaction(publicKey, _recipient, value,fee, inputs);
         newTransaction.generateSignature(privateKey);
 
         for(TransactionInput input: inputs){
             UTX0s.remove(input.transactionOutputId);
         }
         Noob.mempool.add(newTransaction);
-        System.out.println("Transaction submitted to mempool. pending: " + Noob.mempool.size());
+        System.out.println("Transaction submitted to mempool. pending: " +
+                StringUtil.toCoins(value)+
+                " Fee"+ StringUtil.toCoins(fee)+
+                "mempool"+Noob.mempool.size());
         return newTransaction;
     }
 
