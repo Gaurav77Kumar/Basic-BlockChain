@@ -1,6 +1,10 @@
 import java.security.PublicKey;
+import java.io.Serializable;
 
-public class TransactionOutput {
+public class TransactionOutput implements Serializable {
+    public static final long serialVersionUID = 1L;
+
+
     public String id;
     public PublicKey recipient;
     public long value;

@@ -1,7 +1,9 @@
+import java.io.Serializable;
 import java.security.*;
 import java.util.ArrayList;
 
-public class Transaction {
+public class Transaction implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     public String transactionId;       // This is also the hash of the transaction
     public PublicKey sender;           // Senders address/public key
@@ -65,11 +67,11 @@ public class Transaction {
 
         // Gather transaction inputs (Make sure they are unspent):
         for(TransactionInput i : inputs) {
-            i.UTXO = Noob.UTXOs.get(i.transactionOutputId);
+            i.UTXO = BlockchainState.UTXOs.get(i.transactionOutputId);
     }
 
         // Check if transaction is valid:
-        if(getInputsValue() < Noob.minimumTransaction) {
+        if(getInputsValue() < BlockchainState.minimumTransaction) {
             System.out.println("#Transaction Inputs too small: " + StringUtil.toCoins((long) getInputsValue()));
             return false;
         }
@@ -87,13 +89,13 @@ public class Transaction {
 
         // Add outputs to Unspent list
         for(TransactionOutput o : outputs) {
-            Noob.UTXOs.put(o.id , o);
+            BlockchainState.UTXOs.put(o.id , o);
         }
 
         // Remove transaction inputs from UTXO lists as spent:
         for(TransactionInput i : inputs) {
             if(i.UTXO == null) continue; // if Transaction can't be found skip it
-            Noob.UTXOs.remove(i.UTXO.id);
+            BlockchainState.UTXOs.remove(i.UTXO.id);
         }
 
         return true;

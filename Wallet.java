@@ -38,7 +38,7 @@ public class Wallet {
     public long getBalance() {
         long total = 0;
 
-        for(Map.Entry<String, TransactionOutput> item: Noob.UTXOs.entrySet()){
+        for(Map.Entry<String, TransactionOutput> item: BlockchainState.UTXOs.entrySet()){
             TransactionOutput UTX0 = item.getValue();
             if(UTX0.isMine(publicKey)) {               // If output belongs to me
                 UTX0s.put(UTX0.id, UTX0);              // Add it to our list of unspent transactions.
@@ -76,11 +76,11 @@ public class Wallet {
         for(TransactionInput input: inputs){
             UTX0s.remove(input.transactionOutputId);
         }
-        Noob.mempool.add(newTransaction);
+        BlockchainState.mempool.add(newTransaction);
         System.out.println("Transaction submitted to mempool. pending: " +
                 StringUtil.toCoins(value)+
                 " Fee"+ StringUtil.toCoins(fee)+
-                "mempool"+Noob.mempool.size());
+                "mempool"+BlockchainState.mempool.size());
         return newTransaction;
     }
 

@@ -1,257 +1,94 @@
-import java.sql.SQLOutput;
-import java.util.ArrayList;
 import java.security.Security;
-import java.util.HashMap;
 import javax.swing.SwingUtilities;
-import java.security.PublicKey;
 
-public class Noob {
+// Set up genesis, wire wallets, call MiningEnginer and chainValidator
 
-    public static ArrayList<Block> blockchain = new ArrayList<Block>();
-    public static HashMap<String, TransactionOutput> UTXOs = new HashMap<String, TransactionOutput>(); //list of all unspent transactions.
+public class Noob{
 
-    public static ArrayList<Transaction> mempool = new ArrayList<Transaction>();  // we are using mempool for unconfirmed transaction
-
-
-    public static int difficulty = 3;
-    public static long minimumTransaction = 10_00000000L;
-   public static long miningReward = 1_000_000L;
-
-   public static int retargetInterval = 3;       // recalculate difficulty every 3 blocks
-   public static long targetBlockTimeMs = 2000;  // target block time in miliseconds
-
-
-    public static Wallet walletA;
-    public static Wallet walletB;
-    public static Transaction genesisTransaction;
-
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
 
-        // Create the new wallets
-        walletA = new Wallet();
-        walletB = new Wallet();
+        // Setup Wallets
+
+        BlockchainState.walletA = new Wallet();
+        BlockchainState.walletB = new Wallet();
         Wallet coinbase = new Wallet();
 
-        System.out.println("Coinbase key:" + coinbase.publicKey);
-        System.out.println("walletA key: " + walletA.publicKey);
+        // 100 coins hoga to start the chain
+        BlockchainState.genesisTransaction = new Transaction(coinbase.publicKey, BlockchainState.walletA.publicKey, 100_00000000L,0L,null);
 
-        // Create genesis transaction, which sends 100 NoobCoin to walletA;
-        genesisTransaction = new Transaction(coinbase.publicKey, walletA.publicKey,100_00000000L , 0L,null);
-        genesisTransaction.generateSignature(coinbase.privateKey);     // manually sign the genesis transaction
-        genesisTransaction.transactionId = "0"; // manually set the transaction id
+        BlockchainState.genesisTransaction.generateSignature(coinbase.privateKey);
+        BlockchainState.genesisTransaction.transactionId = "0";
+        BlockchainState.genesisTransaction.outputs.add(new TransactionOutput(BlockchainState.genesisTransaction.recipient, BlockchainState.genesisTransaction.value, BlockchainState.genesisTransaction.transactionId));
+        BlockchainState.UTXOs.put(BlockchainState.genesisTransaction.outputs.get(0).id, BlockchainState.genesisTransaction.outputs.get(0));
 
-        genesisTransaction.outputs.add(new TransactionOutput(genesisTransaction.recipient, genesisTransaction.value, genesisTransaction.transactionId)); // manually add the Transactions Output
-        UTXOs.put(genesisTransaction.outputs.get(0).id, genesisTransaction.outputs.get(0));
 
         System.out.println("Creating and Mining Genesis block... ");
         Block genesis = new Block("0");
-        genesis.addTransaction(genesisTransaction);
-        addBlock(genesis);
+        genesis.addTransaction(BlockchainState.genesisTransaction);
+        genesis.mineBlock(BlockchainState.difficulty);
+        BlockchainState.blockchain.add(genesis);
 
-        SwingUtilities.invokeLater(Dashboard::new);
+        NetworkManager network = new NetworkManager();
 
-       // WalletA is miner now they will earn rewards for mining the block
-        System.out.println("\n WalletA balance: " + StringUtil.toCoins( walletA.getBalance()));
+        Node node1 = network.createNode(" Node 1", 6001);
+        Node node2 = network.createNode("node 2",6002);
 
-        System.out.println("\n WalletA send 40 to walletB..");
-        walletA.sendFunds(walletB.publicKey, 40_00000000L,50000000L);
+        network.connectPeers(node1, node2, "localhost");
+
+        network.seedAll(genesis,BlockchainState.UTXOs);
+
+        network.startAll();
+        Thread.sleep(200);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutting down...");
+            network.stopAll();
+        }));
+
+        SwingUtilities.invokeLater(() -> new Dashboard(node1, node2));
 
 
-        // WalletA mines earn 10 coin reward automatically
-        System.out.println("\nWalletA mines block 1 earn reward..");
-        Block block1 = mineNextBlock(genesis.hash, walletA);
+        BlockchainState.printState();
+        network.printNetworkStatus();
 
-        System.out.println("\n WalletA balance: " + StringUtil.toCoins(walletA.getBalance()));
-        System.out.println("\n WalletB balance: " + StringUtil.toCoins(walletB.getBalance()));
-
-        System.out.println("\nWalletB send 20 to walletA..");
-        walletB.sendFunds(walletA.publicKey, 20_00000000L, 50000000L);
-
-        // walletB mines block 2 earn 10 coins
-        System.out.println("\nWalletB mines block 2 earn reward..");
-        Block block2 = mineNextBlock(block1.hash, walletB);
-
-        System.out.println("\nWalletA balance: " + StringUtil.toCoins(walletA.getBalance()));
-        System.out.println("\nWalletB balance: " + StringUtil.toCoins(walletB.getBalance()));
-
-        System.out.println("\nWalletA send 40 to walletB");
-        walletA.sendFunds(walletB.publicKey, 40_00000000L, 50000000L);
-        Block b1 = mineNextBlock(blockchain.get(blockchain.size() - 1).hash, walletA);
-
-        System.out.println("\nWalletB send 10 to walletA");
-        walletB.sendFunds(walletB.publicKey,10_00000000L, 50000000L);
-        Block b2 = mineNextBlock(blockchain.get(blockchain.size() - 1).hash, walletB);
-
-        System.out.println("Final balance");
-        System.out.println("\nWalletA balance: " + StringUtil.toCoins(walletA.getBalance()));
-        System.out.println("\nWalletB balance: " + StringUtil.toCoins(walletB.getBalance()));
-
-        isChainValid();
-    }
-
-    // Creating a new coinbase transaction no inputs creating coins from nothing and sending to miner
-    public static Transaction createCoinbaseTx(Wallet miner,long totalReward){
-        Transaction coinbaseTx = new Transaction(null,miner.publicKey, totalReward,0L, new ArrayList<>());
-
-        coinbaseTx.transactionId = StringUtil.applySha256(
-                "COINBASE"+ miner.publicKey.toString() + System.currentTimeMillis()
+        System.out.println("Wallet -> WalletB: 40 coins");
+        BlockchainState.walletA.sendFunds(
+                BlockchainState.walletB.publicKey,
+                40_00000000L,
+                50_000_000L
         );
 
-        TransactionOutput out = new TransactionOutput(
-                miner.publicKey,
-                miningReward,
-                coinbaseTx.transactionId
+        System.out.println("Node 1 mines block 1 and broadcast");
+        Block b1 = MiningEngine.mineNextBlock(genesis.hash, BlockchainState.walletA, node1);
+        Thread.sleep(1000);
+
+        network.printNetworkStatus();
+
+        System.out.println("WalletB -> WalletA: 20 coins");
+        BlockchainState.walletB.sendFunds(
+                BlockchainState.walletA.publicKey,
+                20_00000000L,
+                20_000_000L
         );
-        coinbaseTx.outputs.add(out);
-        UTXOs.put(out.id,out);
 
-        System.out.println("Coinbase reward: " + miningReward + "coins> miner");
-        return coinbaseTx;
-    }
-
-    // Miner drains mempool into new block and mines it
-    public static Block mineNextBlock(String previousHash, Wallet miner) {
-
-        Block block = new Block(previousHash);
-
-        // Step1: Sort mempool by fee descending-highest fee minded first
-        mempool.sort((a,b) -> Long.compare(b.fee,a.fee));
-
-        // Step2: Sum all fee from pending transaction
-        long totalFees = mempool.stream().mapToLong(tx -> tx.fee).sum();
-
-        // Step3: Coinbase = block reward + all fees collected
-        long totalReward = miningReward + totalFees;
-        Transaction coinbase = createCoinbaseTx(miner,totalReward);
-        block.addCoinbase(coinbase);
-
-        if (mempool.isEmpty()) {
-            System.out.println("Mempool is empty nothing to mine");
-            return null;
-        }
-
-        // pulling every pending transaction into this block
-        for (Transaction tx : mempool) {
-            block.addTransaction(tx);
-        }
-        mempool.clear();   // Empty the waiting room
-        addBlock(block);
-
-        System.out.println("Block mined with " + block.transactions.size() + " transactions(s)");
-        return block;
-    }
+        System.out.println("Node 2 mines block 2 and broadcast");
+        Block b2 = MiningEngine.mineNextBlock(b1.hash, BlockchainState.walletB, node2);
+        Thread.sleep(1000);
 
 
-    public static Boolean isChainValid() {
+        Block b3 = MiningEngine.mineNextBlock(b2.hash, BlockchainState.walletA, node1);
+        Thread.sleep(1000);
+        System.out.println("Waiting for all broadcast to complete");
+        Thread.sleep(3000);
 
-        Block currentBlock;
-        Block previousBlock;
 
-        HashMap<String, TransactionOutput> tempUTXOs = new HashMap<String, TransactionOutput>();
-        tempUTXOs.put(genesisTransaction.outputs.get(0).id, genesisTransaction.outputs.get(0));
+        network.printNetworkStatus();
+        BlockchainState.printState();
 
-        //loop through blockchain to check hashes:
-        for (int i = 1; i < blockchain.size(); i++) {
-            currentBlock = blockchain.get(i);
-            previousBlock = blockchain.get(i - 1);
 
-            //compare registered hash and calculated hash:
-            if (!currentBlock.hash.equals(currentBlock.calculateHash())) {
-                System.out.println("Current Hashes not equal");
-                return false;
-            }
-            //compare previous hash and registered previous hash
-            if (!previousBlock.hash.equals(currentBlock.previousHash)) {
-                System.out.println("Previous Hashes not equal");
-                return false;
-            }
-
-            String hashTarget = new String(new char[currentBlock.difficulty]).replace('\0', '0');
-            if (!currentBlock.hash.substring(0,currentBlock.difficulty).equals(hashTarget)) {
-                System.out.println("This block hasn't been mined");
-                return false;
-            }
-            TransactionOutput tempOutput;
-            for (int t = 0; t < currentBlock.transactions.size(); t++) {
-                Transaction tx = currentBlock.transactions.get(t);
-
-                if(t == 0 && tx.sender == null){
-                    for(TransactionOutput output: tx.outputs){
-                        tempUTXOs.put(output.id, output);
-                    }
-                    continue;
-                }
-
-                if (!tx.verifySignature()) {
-                    System.out.println("Signature on Transaction(" + t + ") is Invalid");
-                    return false;
-                }
-                if (tx.getInputsValue() != tx.getOutputsValue()+tx.fee) {
-                    System.out.println("Inputs are not equal to outputs on Transaction(" + t + ")");
-                    return false;
-                }
-
-                for (TransactionInput input : tx.inputs) {
-                    tempOutput = tempUTXOs.get(input.transactionOutputId);
-
-                    if (tempOutput == null) {
-                        System.out.println("Referenced input on Transaction(" + t + ") is Missing");
-                        return false;
-                    }
-
-                    if (input.UTXO.value != tempOutput.value) {
-                        System.out.println("Referenced input Transaction(" + t + ") value is Invalid");
-                        return false;
-                    }
-
-                    tempUTXOs.remove(input.transactionOutputId);
-                }
-
-                for (TransactionOutput output : tx.outputs) {
-                    tempUTXOs.put(output.id, output);
-                }
-                if (tx.outputs.get(0).recipient != tx.recipient) {
-                    System.out.println("Transaction(" + t + ") output recipient is not who it should be");
-                    return false;
-                }
-            }
-
-        }
-        System.out.println("Blockchain is valid");
-        return true;
-    }
-    private static void addBlock(Block newBlock)  {
-        newBlock.mineBlock(difficulty);
-        blockchain.add(newBlock);
-        adjustDifficulty();
-    }
-
-    public static void adjustDifficulty(){
-        int chainSize = blockchain.size();
-
-        if(chainSize == 0 || chainSize % retargetInterval != 0) return; // Only retarget at interval Boundary
-        Block latest = blockchain.get(chainSize - 1);
-        Block reference = blockchain.get(chainSize - retargetInterval);
-
-        long actualTimeMs = latest.timeStamp - reference.timeStamp;
-        long expectedTimeMs = targetBlockTimeMs * retargetInterval;
-
-        System.out.println("Expected time: " + expectedTimeMs + "ms");
-        System.out.println("Actual time: " + actualTimeMs + "ms");
-
-        if(actualTimeMs < expectedTimeMs /2){
-            // mining too fast increase difficulty
-            difficulty++;
-            System.out.println("Blocked mined too fast > diffulcty increase to: "+ difficulty);
-        } else if(actualTimeMs > expectedTimeMs * 2){
-            //Mining too slow decraese difficulty
-            difficulty = Math.max(1, difficulty -1);
-            System.out.println("Blocked mined too slow > diffulcty decrease to: "+ difficulty);
-        } else{
-            System.out.println("Blocked mined within acceptable time > diffulcty stays the same"+ difficulty);
-        }
-
+        ChainValidator.isChainValid();
 
     }
 }
+
