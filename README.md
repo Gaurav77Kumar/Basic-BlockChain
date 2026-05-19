@@ -5,27 +5,33 @@
   <img src="https://img.shields.io/badge/BouncyCastle-ECDSA-orange?style=for-the-badge" />
   <img src="https://img.shields.io/badge/GSON-2.10.1-47A248?style=for-the-badge" />
   <img src="https://img.shields.io/badge/JUnit-5.10-25A162?style=for-the-badge&logo=junit5&logoColor=white" />
-  <img src="https://img.shields.io/badge/Proof--of--Work-SHA--256-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/P2P-Java_Sockets-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Proof--of--Work-SHA--256-informational?style=for-the-badge" />
 </p>
 
 ---
 
 ## 📌 Overview
 
-A production-grade Bitcoin-style blockchain engine built from scratch in Java, implementing the complete UTXO transaction lifecycle — from coinbase issuance through mempool staging, PoW mining, and full chain validation. Replicates real-world consensus mechanics including dynamic difficulty retargeting, Merkle root integrity, and ECDSA cryptographic signing.
+A Bitcoin-style blockchain engine built from scratch in Java, implementing the **complete UTXO transaction lifecycle** — from coinbase issuance through fee-prioritized mempool staging, PoW mining, dynamic difficulty retargeting, and 2-node P2P consensus via Java Sockets. Every design decision mirrors a real Bitcoin mechanic.
 
 | Feature | Status |
 |---|---|
 | UTXO Transaction Model | ✅ |
 | ECDSA Wallets (BouncyCastle) | ✅ |
+| Satoshi-Denomination Integers | ✅ |
 | Proof-of-Work Mining | ✅ |
-| Mempool (Transaction Staging) | ✅ |
-| Coinbase Transaction + Mining Reward | ✅ |
-| Dynamic Difficulty Retargeting | ✅ |
 | Merkle Root Integrity | ✅ |
+| Mempool with Fee Prioritization | ✅ |
+| Coinbase Transaction + Mining Reward | ✅ |
+| Transaction Fee Market | ✅ |
+| Dynamic Difficulty Retargeting | ✅ |
+| Per-Block Difficulty Snapshot | ✅ |
 | Full Chain Validation | ✅ |
+| 2-Node P2P Network (Java Sockets) | ✅ |
+| 4-Layer Architecture (SRP) | ✅ |
 | Swing GUI Dashboard | ✅ |
-
+| JUnit 5 Test Suite (8 cases) | ✅ |
 
 ---
 
@@ -34,90 +40,116 @@ A production-grade Bitcoin-style blockchain engine built from scratch in Java, i
 ### 🔐 Wallets & Cryptography
 - ECDSA key pair generation via BouncyCastle (`prime192v1` curve)
 - Private key signing + public key verification per transaction
+- Fee field included in signed data — prevents miner from tampering fee after signing
 - Base64 key encoding via `StringUtil` crypto layer
 
 ### 💰 UTXO Model
 - Full Bitcoin-style Unspent Transaction Output model
-- Dynamic balance calculated by scanning UTXO map — no stored balance
-- Double-spend prevention: spent inputs removed from global UTXO set immediately
-- Input-output equality enforced on every `processTransaction()` call
+- Dynamic balance calculated by scanning UTXO map — no stored balance field
+- Double-spend prevention: spent inputs removed from global UTXO set atomically
+- Input-output equality enforced: `inputsValue = outputsValue + fee`
 - Change outputs automatically returned to sender
+
+### 🪙 Satoshi Denomination
+- All coin values stored as `long` integers (satoshis) — never `float` or `double`
+- 1 NoobCoin = 100,000,000 satoshis — identical to Bitcoin's unit model
+- Eliminates floating-point precision errors (`0.1f + 0.2f = 0.30000001` in Java)
+- Display conversion via `StringUtil.toCoins()` — satoshis → `x.xxxxxxxx` string
+
+### 🏦 Mempool & Fee Market
+- Transactions submitted via `sendFunds()` enter a global pending pool
+- Miner sorts mempool **descending by fee** before packing a block
+- Highest-fee transactions confirmed first — replicates Bitcoin's economic incentive
+- Miner income = `miningReward + sum(all fees in block)`
+- Mempool cleared atomically after successful mine
 
 ### ⛏️ Full Bitcoin Transaction Lifecycle
 ```
-Coinbase TX (miner reward)
+Coinbase TX (block reward + fees → miner)
     ↓
-Wallet.sendFunds() → Mempool (pending)
+Wallet.sendFunds(recipient, value, fee) → Mempool
     ↓
-mineNextBlock() → Block (coinbase first, then mempool TXs)
+MiningEngine.mineNextBlock() → sort by fee → pack block
     ↓
-PoW solved → Block appended to chain → UTXO set updated
+PoW solved → broadcast to peers → peers validate → append
+    ↓
+UTXO set updated → mempool cleared
 ```
 
-### 🏦 Mempool
-- Transactions submitted via `sendFunds()` enter a global pending pool
-- Miner drains the full mempool into each new block
-- Mempool cleared atomically after successful mine — no double-processing
-
-### 🪙 Coinbase Transaction
-- First transaction in every mined block — no inputs, creates coins
-- Miner wallet receives `miningReward` coins per block
-- Only legal mechanism for new coin issuance — prevents arbitrary coin creation
-- Skips signature verification (no sender by design)
-
 ### 🎯 Dynamic Difficulty Retargeting
-- Difficulty stored **per block** at mine time (not globally — fixes validation bug)
-- Every `retargetInterval` blocks: compares actual vs target block time
-- Increases difficulty if mining faster than target, decreases if slower
-- Minimum difficulty floor of 1 enforced
+- Difficulty stored **per block** at mine time — not read from global state
+- Every `retargetInterval` blocks: compares actual vs target mine time
+- Increases difficulty if blocks mined too fast, decreases if too slow
+- Per-block snapshot fixes mid-chain retarget validation bug:
+  blocks mined at difficulty 3 are validated against 3, not current difficulty 4
 
 ### 🌳 Merkle Root
 - Merkle root computed from all transaction IDs in a block
-- Stored in block header and included in `calculateHash()`
-- Updated on every `addTransaction()` call
-- Any tampered transaction invalidates the root — detected by `isChainValid()`
+- Stored in block header, included in `calculateHash()`
+- Updated on every `addTransaction()` and `addCoinbase()` call
+- Any tampered transaction changes the root → breaks block hash → detected by validator
 
-### 🔎 Full Chain Validation
-- Hash chain integrity: each block's `previousHash` must match prior block's `hash`
-- Per-block hash recalculation with correct stored difficulty
+### 🔎 Full Chain Validation (ChainValidator.java)
+- Hash chain integrity: `previousHash` must match prior block's `hash`
+- Per-block hash recalculation verified against stored hash
+- Each block validated against **its own stored difficulty** — not global
 - ECDSA signature verification on every non-coinbase transaction
-- UTXO reference validation: inputs must exist and match stored values
-- Coinbase transactions skipped correctly (index 0, null sender)
+- Conservation law: `inputsValue = outputsValue + fee` checked per TX
+- UTXO reference validation: every input must reference an existing unspent output
+- Coinbase skipped correctly (index 0, null sender)
+
+### 🌐 2-Node P2P Network
+- Each `Node` runs a `ServerSocket` listener on its own port (background thread)
+- Mined blocks serialized via `ObjectOutputStream` and broadcast to all peers
+- Receiving node validates before appending:
+    1. `previousHash` matches local chain tip
+    2. Hash satisfies stored difficulty
+    3. Recalculated hash matches stored hash
+    4. All transaction signatures valid
+- `synchronized receiveBlock()` prevents race condition on concurrent broadcasts
+- Retry logic (3 attempts) handles peer startup delay
+- Shutdown hook calls `network.stopAll()` on JVM exit — no `Connection refused` errors
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-Wallet → sendFunds() → Mempool → mineNextBlock() → Block (Coinbase + TXs) → Chain → isChainValid()
+Wallet → sendFunds() → Mempool (fee-sorted) → MiningEngine.mineNextBlock()
+    → Block (Coinbase + TXs) → PoW → broadcast via Node → peer validates
+    → appended to local chain → ChainValidator.isChainValid()
 ```
 
-### 6-Layer Design
+### 4-Layer Design (Single Responsibility Principle)
 
 ```
-             ┌────────────────────┐
-             │    Dashboard GUI   │  Swing dashboard — live balances,
-             └─────────▲──────────┘  mempool count, difficulty, block height
+┌─────────────────────────────────────────────────────┐
+│                   Dashboard.java                     │
+│         Swing GUI — live balances, mempool,          │
+│         difficulty, block height, mine/send controls │
+└──────────────────────┬──────────────────────────────┘
                        │
-             ┌─────────┴──────────┐
-             │      Noob.java     │  App layer — blockchain state, mempool,
-             └─────────▲──────────┘  mineNextBlock(), isChainValid(), difficulty retarget
-                       │
-      ┌────────────────┼────────────────┐
-      │                │                │
- ┌────┴────┐   ┌───────┴──────┐   ┌────┴────┐
- │ Wallet  │   │ Transaction  │   │  Block  │
- │         │   │  + Mempool   │   │+ Merkle │
- └────▲────┘   └──────▲───────┘   └────▲────┘
-      │               │                │
-      └───────────────┴────────────────┘
-                       │
-               ┌───────┴────────┐
-               │   StringUtil   │
-               │  SHA-256       │
-               │  ECDSA Sign    │
-               │  Base64 Encode │
-               └────────────────┘
+┌──────────────────────▼──────────────────────────────┐
+│                    Noob.java                         │
+│    Orchestration only — genesis setup, simulation    │
+│    Wires wallets, nodes, network, GUI                │
+└───────┬──────────────┬───────────────┬──────────────┘
+        │              │               │
+┌───────▼──────┐ ┌─────▼───────┐ ┌────▼───────────────┐
+│BlockchainState│ │MiningEngine │ │  ChainValidator     │
+│  blockchain[] │ │mineNextBlock│ │  isChainValid()     │
+│  UTXOs map    │ │createCoinbase│ │  4-rule validation  │
+│  mempool[]    │ │adjustDifficulty│ │  per-block checks  │
+│  wallets      │ │fee aggregation│ └────────────────────┘
+│  parameters   │ └─────────────┘
+└───────────────┘
+        │
+┌───────▼──────────────────────────────────────────────┐
+│                  Core Data Classes                    │
+│   Block · Transaction · TransactionInput              │
+│   TransactionOutput · Wallet · StringUtil             │
+│   Node · NetworkManager                              │
+└───────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -126,14 +158,21 @@ Wallet → sendFunds() → Mempool → mineNextBlock() → Block (Coinbase + TXs
 
 ```
 src/
-├── Noob.java              ← Main class: blockchain state, mempool, mining, validation
-├── Block.java             ← Block: hash chain, nonce, merkle root, per-block difficulty
-├── Transaction.java       ← UTXO TX: inputs, outputs, signing, merkle tree
-├── TransactionInput.java  ← UTXO input reference
-├── TransactionOutput.java ← UTXO output: recipient, value, ID
-├── Wallet.java            ← ECDSA keypair, balance scan, sendFunds()
-├── StringUtil.java        ← SHA-256, ECDSA sign/verify, Base64
-└── Dashboard.java         ← Swing GUI: live stats, send, mine, validate
+├── Noob.java               ← Orchestration: genesis, simulation, network wiring
+├── BlockchainState.java    ← All global state: chain, UTXOs, mempool, params
+├── MiningEngine.java       ← PoW mining, coinbase, fee aggregation, difficulty retarget
+├── ChainValidator.java     ← Full chain validation — reads state, never writes
+├── Node.java               ← P2P node: ServerSocket listener, broadcast, consensus
+├── NetworkManager.java     ← Creates nodes, wires peers, seeds genesis, startAll/stopAll
+├── Block.java              ← Block: hash chain, nonce, merkle root, per-block difficulty
+├── Transaction.java        ← UTXO TX: inputs, outputs, fee, signing, merkle tree
+├── TransactionInput.java   ← UTXO input reference pointer
+├── TransactionOutput.java  ← UTXO output: recipient, value (satoshis), ID
+├── Wallet.java             ← ECDSA keypair, balance scan, sendFunds(value, fee)
+├── StringUtil.java         ← SHA-256, ECDSA sign/verify, Base64, toCoins()
+└── Dashboard.java          ← Swing GUI: live stats, direction/miner combos, log area
+
+
 ```
 
 ---
@@ -144,11 +183,12 @@ src/
 ## ⚙️ Requirements
 
 - Java JDK 17+
-- GSON 2.10.1
 - BouncyCastle `bcprov-jdk15on-1.70`
-- JUnit Jupiter 5.10.0 (test scope)
+- GSON `2.10.1`
+- JUnit Jupiter `5.10.0` (test scope)
 
 
+```
 
 ---
 
@@ -159,23 +199,49 @@ src/
 git clone https://github.com/Gaurav77Kumar/Basic-BlockChain
 cd Basic-BlockChain
 
-# 2. Add dependencies via Maven or IntelliJ Project Structure → Libraries
+# 2. Install dependencies
+mvn install
 
-# 3. Run blockchain simulation
-# Execute Noob.java — opens Dashboard GUI + prints full lifecycle to console
+# 3. Run simulation
+mvn exec:java -Dexec.mainClass="Noob"
+# Opens Swing Dashboard GUI + prints full P2P lifecycle to console
+# Close the GUI window to shut down nodes cleanly via shutdown hook
 
-# 4. Run tests
-mvn test
-# or right-click BlockchainTest.java → Run in IntelliJ
 ```
 
 ---
 
-## 📸 Output
+## 📊 Sample Output
+
+```
+Block Mined!!! : 000429f7a717c22b...
+Node 1 → localhost:6002 ✓
+Node 2 accepted. Local height: 2
+Node-1: height=2 | Node-2: height=2 | IN SYNC ✓
+
+WalletB → WalletA: 20 coins
+Coinbase: 10.20000000 coins → miner (reward + fees)
+Block Mined!!! : 00070995ef15e864...
+Node-1: height=3 | Node-2: height=3 | IN SYNC ✓
+
+Difficulty retarget — Expected: 2003ms | Actual: 1931ms
+Difficulty stays the same: 3
+
+Chain height: 4 | Difficulty: 3 | Mempool: 0
+Wallet A: 100.00000000 | Wallet B: 30.00000000
+Blockchain valid — 4 blocks checked.
+
+Shutting down P2P nodes...
+Process finished with exit code 0
+```
+
+---
+
+## 📸 Screenshots
 
 <p align="center">
-  <img src="assets/console-ouput.png" width="800" alt="Console output showing full blockchain lifecycle"/>
+  <img src="assets/console-ouput.png" width="800" alt="Console output showing full P2P blockchain lifecycle"/>
 </p>
 <p align="center">
-  <img src="assets/output.png" width="800" alt="Swing dashboard with live wallet balances and controls"/>
+  <img src="assets/output.png" width="800" alt="Swing dashboard with live wallet balances, mempool count, and mining controls"/>
 </p>
