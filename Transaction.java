@@ -5,17 +5,17 @@ import java.util.ArrayList;
 public class Transaction implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    public String transactionId;       // This is also the hash of the transaction
-    public PublicKey sender;           // Senders address/public key
-    public PublicKey recipient;        // Recipients address/public key
-    public long value;                // Contains the amount we wish to send to the recipient
-    public long fee;                  // Contains the fee we wish to pay to the miner for processing our transaction. Fee is optional and can be zero.
-    public byte[] signature;           // This is to prevent anybody else from spending funds in our
+    public String transactionId;
+    public PublicKey sender;
+    public PublicKey recipient;
+    public long value;
+    public long fee;
+    public byte[] signature;
 
-    public ArrayList<TransactionInput> inputs = new ArrayList<TransactionInput>();       // List of transaction inputs
-    public ArrayList<TransactionOutput> outputs = new ArrayList<TransactionOutput>();     // List of transaction outputs
+    public ArrayList<TransactionInput> inputs = new ArrayList<TransactionInput>();
+    public ArrayList<TransactionOutput> outputs = new ArrayList<TransactionOutput>();
 
-    private static int sequence = 0;      // A rough count of how many transactions have been generated
+    private static int sequence = 0;
 
     public Transaction(PublicKey from, PublicKey to, long value,long fee, ArrayList<TransactionInput> inputs) {
         this.sender = from;
@@ -61,7 +61,7 @@ public class Transaction implements Serializable {
     public boolean processTransaction() {
 
         if(!verifySignature()) {
-            System.out.println("#Transaction Signature failed to verify");
+            System.out.println("Transaction Signature failed to verify");
             return false;
         }
 
@@ -77,15 +77,15 @@ public class Transaction implements Serializable {
         }
 
         // Generate transaction outputs:
-        long leftOver = (long) (getInputsValue() - value -fee); // get value of inputs then the left over change:
+        long leftOver = (long) (getInputsValue() - value -fee);
 
         if(leftOver < 0){
             System.out.println("Insufficient funds to cover value + fee");
             return false;
         }
         transactionId = calculateHash();
-        outputs.add(new TransactionOutput( this.recipient, value,transactionId)); // send value to recipient
-        outputs.add(new TransactionOutput( this.sender, leftOver,transactionId)); // send the left over 'change' back to sender
+        outputs.add(new TransactionOutput( this.recipient, value,transactionId));
+        outputs.add(new TransactionOutput( this.sender, leftOver,transactionId));
 
         // Add outputs to Unspent list
         for(TransactionOutput o : outputs) {
@@ -94,10 +94,9 @@ public class Transaction implements Serializable {
 
         // Remove transaction inputs from UTXO lists as spent:
         for(TransactionInput i : inputs) {
-            if(i.UTXO == null) continue; // if Transaction can't be found skip it
+            if(i.UTXO == null) continue;
             BlockchainState.UTXOs.remove(i.UTXO.id);
         }
-
         return true;
     }
 
@@ -105,13 +104,13 @@ public class Transaction implements Serializable {
     public long getInputsValue() {
         long total = 0;
         for (TransactionInput i : inputs) {
-            if (i.UTXO == null) continue; //if Transaction can't be found skip it
+            if (i.UTXO == null) continue;
             total += i.UTXO.value;
         }
         return total;
     }
 
-    // returns sum of inputs(UTXOs) values
+    // returns sum of outputs
     public long getOutputsValue() {
         long total = 0;
         for (TransactionOutput o : outputs) {
@@ -120,7 +119,6 @@ public class Transaction implements Serializable {
         return total;
     }
 
-    // Fee = what inputs put in minus what output take out
     public long getActualFee(){
         return getInputsValue() - getOutputsValue();
     }
@@ -130,6 +128,7 @@ public class Transaction implements Serializable {
         int count = transactions.size();
 
         ArrayList<String> previousTreeLayer = new ArrayList<String>();
+
         for(Transaction transaction : transactions) {
             previousTreeLayer.add(transaction.transactionId);
         }
@@ -137,19 +136,19 @@ public class Transaction implements Serializable {
 
         while(count > 1) {
             treeLayer = new ArrayList<String>();
+
             for(int i = 0; i < previousTreeLayer.size(); i += 2) {
-
                 String left = previousTreeLayer.get(i);
-
                 String right;
+
                 if(i + 1 < previousTreeLayer.size()) {
                     right = previousTreeLayer.get(i + 1);
                 } else {
-                    right = left; // duplicate last if odd
+                    right = left;
                 }
-
                 treeLayer.add(StringUtil.applySha256(left + right));
             }
+
             count = treeLayer.size();
             previousTreeLayer = treeLayer;
         }
@@ -157,13 +156,4 @@ public class Transaction implements Serializable {
         String merkleRoot = (treeLayer.size() == 1) ? treeLayer.get(0) : "";
         return merkleRoot;
     }
-
-
 }
-
-// Signatures perform two very important task of blockchain:
-// 1. They allow only the owner to spend their coins.
-// 2. They protect the blockchain from hackers trying to change the transaction data (like amount) after it has been signed.
-// If the data is changed after signing, the signature will be invalidated and the transaction will be rejected by the network.
-
-// The Private key is used to sign the data and public key can be used to verify its integrity

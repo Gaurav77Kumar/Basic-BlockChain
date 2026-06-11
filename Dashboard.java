@@ -18,11 +18,9 @@ public class Dashboard {
     private final JComboBox<String> directionCombo;
     private final JComboBox<String> minerCombo;
 
-    // ✅ Store both nodes — needed for MiningEngine.mineNextBlock()
     private final Node node1;
     private final Node node2;
 
-    // ✅ Updated constructor — accepts both nodes
     public Dashboard(Node node1, Node node2) {
         this.node1 = node1;
         this.node2 = node2;
@@ -38,7 +36,6 @@ public class Dashboard {
         root.setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
         root.setBackground(new Color(18, 20, 26));
 
-        // ── Wallet balance cards ───────────────────────────────────────
         JPanel topRow = new JPanel(new GridLayout(1, 2, 10, 0));
         topRow.setOpaque(false);
 
@@ -47,7 +44,7 @@ public class Dashboard {
         topRow.add(makeBalanceCard("Wallet A", walletABalanceLabel, new Color(39, 174, 96)));
         topRow.add(makeBalanceCard("Wallet B", walletBBalanceLabel, new Color(52, 152, 219)));
 
-        // ── Stats bar ──────────────────────────────────────────────────
+
         JPanel statsBar = new JPanel(new GridLayout(1, 4, 8, 0));
         statsBar.setOpaque(false);
 
@@ -66,7 +63,7 @@ public class Dashboard {
         headerPanel.add(topRow,   BorderLayout.NORTH);
         headerPanel.add(statsBar, BorderLayout.SOUTH);
 
-        // ── Log area ───────────────────────────────────────────────────
+        //  Log area
         logArea = new JTextArea();
         logArea.setEditable(false);
         logArea.setLineWrap(true);
@@ -81,7 +78,6 @@ public class Dashboard {
         scroll.setPreferredSize(new Dimension(820, 300));
         scroll.getVerticalScrollBar().setUnitIncrement(16);
 
-        // ── Controls row 1: amount + direction + send ──────────────────
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row1.setOpaque(false);
 
@@ -109,11 +105,9 @@ public class Dashboard {
         row1.add(directionCombo);
         row1.add(sendBtn);
 
-        // ── Controls row 2: miner + mine + validate + clear ───────────
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row2.setOpaque(false);
 
-        // ✅ Miner combo maps directly to node1 / node2
         minerCombo = new JComboBox<>(new String[]{
                 "Node-1 (Wallet A) mines",
                 "Node-2 (Wallet B) mines"
@@ -143,13 +137,13 @@ public class Dashboard {
         controlsPanel.add(rows,        BorderLayout.CENTER);
         controlsPanel.add(statusLabel, BorderLayout.SOUTH);
 
-        // ── Assemble ───────────────────────────────────────────────────
+        // Assemble
         root.add(headerPanel,   BorderLayout.NORTH);
         root.add(scroll,        BorderLayout.CENTER);
         root.add(controlsPanel, BorderLayout.SOUTH);
         frame.add(root, BorderLayout.CENTER);
 
-        // ── Wire actions ───────────────────────────────────────────────
+        // Wire actions
         sendBtn.addActionListener(e -> handleSend());
         mineBtn.addActionListener(e -> handleMine());
         validateBtn.addActionListener(e -> handleValidate());
@@ -168,32 +162,30 @@ public class Dashboard {
         frame.setVisible(true);
     }
 
-    // ── Handlers ───────────────────────────────────────────────────────
-
+    // Handlers
     private void handleSend() {
         if (!isReady()) return;
         try {
-            // Parse amount as coins → convert to satoshis
+            // Parse amount as coins → convert to Satoshi's
             float amountCoins = Float.parseFloat(amountField.getText().trim());
             if (amountCoins <= 0f) {
                 showError("Amount must be > 0.");
                 return;
             }
 
-            // ✅ Convert display value (coins) to satoshis (long)
-            long amountSatoshis = (long)(amountCoins * 100_000_000L);
+            long amountSatoshi = (long)(amountCoins * 100_000_000L);
 
-            // Default fee: 0.01 coins = 1_000_000 satoshis
-            long feeSatoshis = 1_000_000L;
+            // Default fee: 0.01 coins = 1_000_000 Satoshi's
+            long feeSatoshi = 1_000_000L;
 
             boolean aToB      = directionCombo.getSelectedIndex() == 0;
             Wallet sender     = aToB ? BlockchainState.walletA : BlockchainState.walletB;
             Wallet recipient  = aToB ? BlockchainState.walletB : BlockchainState.walletA;
             String senderName = aToB ? "A" : "B";
-            String recipName  = aToB ? "B" : "A";
+            String recipeName = aToB ? "B" : "A";
 
-            // ✅ sendFunds() submits to BlockchainState.mempool automatically
-            Transaction tx = sender.sendFunds(recipient.publicKey, amountSatoshis, feeSatoshis);
+            //  sendFunds() submits to BlockchainState.mempool automatically
+            Transaction tx = sender.sendFunds(recipient.publicKey, amountSatoshi, feeSatoshi);
 
             if (tx == null) {
                 showError("Insufficient funds in Wallet " + senderName +
@@ -203,9 +195,9 @@ public class Dashboard {
 
             log("TX", String.format(
                     "Wallet %s → Wallet %s | %.8f coins | fee: %.8f | mempool: %d",
-                    senderName, recipName,
-                    amountSatoshis / 100_000_000.0,
-                    feeSatoshis    / 100_000_000.0,
+                    senderName, recipeName,
+                    amountSatoshi / 100_000_000.0,
+                    feeSatoshi / 100_000_000.0,
                     BlockchainState.mempool.size()
             ));
             setStatus("TX pending in mempool. Click Mine Block to confirm.");
@@ -220,7 +212,7 @@ public class Dashboard {
     private void handleMine() {
         if (!isReady()) return;
 
-        // ✅ Pick correct node AND wallet based on combo selection
+        // Pick correct node AND wallet based on combo selection
         boolean node1Selected = minerCombo.getSelectedIndex() == 0;
         Node   miningNode  = node1Selected ? node1  : node2;
         Wallet miningWallet= node1Selected ? BlockchainState.walletA
@@ -233,25 +225,23 @@ public class Dashboard {
         String prevHash = BlockchainState.getChainTip().hash;
 
         try {
-            // ✅ MiningEngine handles coinbase + mempool drain + broadcast
+            //  MiningEngine handles Coinbase + mempool drain + broadcast
             Block mined = MiningEngine.mineNextBlock(prevHash, miningWallet, miningNode);
 
-            if (mined != null) {
-                log("MINE", String.format(
-                        "Block #%d mined | hash: %s... | difficulty: %d",
-                        BlockchainState.getHeight(),
-                        mined.hash.substring(0, 14),
-                        mined.difficulty
-                ));
+            log("MINE", String.format(
+                    "Block #%d mined | hash: %s... | difficulty: %d",
+                    BlockchainState.getHeight(),
+                    mined.hash.substring(0, 14),
+                    mined.difficulty
+            ));
 
-                // ✅ Show network sync status after mine
-                boolean inSync = node1.getLocalHeight() == node2.getLocalHeight();
-                log("NET", "Node-1 height: " + node1.getLocalHeight() +
-                        " | Node-2 height: " + node2.getLocalHeight() +
-                        (inSync ? " | IN SYNC ✓" : " | OUT OF SYNC ✗"));
+            // Show network sync status after mine
+            boolean inSync = node1.getLocalHeight() == node2.getLocalHeight();
+            log("NET", "Node-1 height: " + node1.getLocalHeight() +
+                    " | Node-2 height: " + node2.getLocalHeight() +
+                    (inSync ? " | IN SYNC ✓" : " | OUT OF SYNC ✗"));
 
-                setStatus("Block mined. Difficulty: " + BlockchainState.difficulty);
-            }
+            setStatus("Block mined. Difficulty: " + BlockchainState.difficulty);
             refreshAll();
 
         } catch (Exception ex) {
@@ -263,7 +253,7 @@ public class Dashboard {
         if (!isReady()) return;
         log("VALIDATE", "Validating " + BlockchainState.blockchain.size() + " blocks...");
 
-        // ✅ ChainValidator — not Noob.isChainValid()
+        // ChainValidator — not Noob.isChainValid()
         boolean valid = ChainValidator.isChainValid();
 
         if (valid) {
@@ -276,10 +266,10 @@ public class Dashboard {
         }
     }
 
-    // ── UI refresh ─────────────────────────────────────────────────────
+    // UI refresh
 
     private void refreshAll() {
-        // ✅ All state from BlockchainState — not Noob
+        //  All state from BlockchainState — not Noob
         String a = BlockchainState.walletA != null
                 ? StringUtil.toCoins(BlockchainState.walletA.getBalance()) : "—";
         String b = BlockchainState.walletB != null
@@ -307,7 +297,7 @@ public class Dashboard {
         return true;
     }
 
-    // ── Logging ────────────────────────────────────────────────────────
+    // Logging
 
     private void log(String tag, String msg) {
         logArea.append("[" + tag + "] " + msg + "\n");
@@ -322,7 +312,7 @@ public class Dashboard {
 
     private void setStatus(String msg) { statusLabel.setText(msg); }
 
-    // ── Component factories ────────────────────────────────────────────
+    // Component factories
 
     private String balanceHtml(String value) {
         return "<html><span style='font-family:Consolas;font-size:24px;" +

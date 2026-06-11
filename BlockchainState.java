@@ -1,7 +1,7 @@
 import java.util.ArrayList;
 import java.util.HashMap;
 
-
+// Globally accessible without passing any reference for this project this is good idea but for production we use dependency injection or Service Allocator
 public class BlockchainState{
 
     public static ArrayList<Block> blockchain = new ArrayList<>();
@@ -20,12 +20,12 @@ public class BlockchainState{
 
     public static Transaction genesisTransaction;
 
+    // Initialize the blockchain state with two wallets and a genesis transaction that gives walletA some coins to start with.
     public static Block getChainTip(){
         if(blockchain.isEmpty()) return null;
         return blockchain.get(blockchain.size()-1);
     }
 
-    // Return current chain height
     public static int getHeight(){
         return blockchain.size() ;
     }
@@ -36,7 +36,5 @@ public class BlockchainState{
         System.out.println("Mempool: " + mempool.size() + "pending TX");
         System.out.println("Wallet A: " + StringUtil.toCoins(walletA.getBalance()));
         System.out.println("wallet B: "+ StringUtil.toCoins(walletB.getBalance()));
-
-
     }
 }

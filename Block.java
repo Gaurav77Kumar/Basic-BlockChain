@@ -14,11 +14,9 @@ public class Block implements Serializable {
     public  long timeStamp;
     private int nonce;
 
-    // Block Constructor
     public Block( String previoushash){
         this.previousHash = previoushash;
         this.timeStamp = new Date().getTime();
-
         this.hash = calculateHash();
     }
 
@@ -34,6 +32,7 @@ public class Block implements Serializable {
 
     public void mineBlock(int difficulty) {
         this.difficulty = difficulty;
+
         String target = new String(new char[difficulty]).replace('\0', '0');
         while (!hash.substring(0, difficulty).equals(target)) {
             nonce++;
@@ -51,8 +50,6 @@ public class Block implements Serializable {
 
     // Add transactions to this block
     public boolean addTransaction(Transaction transaction){
-        // Process transaction and check if valid, unless block is genesis block then ignore.
-
         if(transaction == null) return false;
         if((!previousHash.equals("0"))) {
 
@@ -66,5 +63,4 @@ public class Block implements Serializable {
         System.out.println("Transaction Successfully added to Block");
         return true;
     }
-
 }

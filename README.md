@@ -3,8 +3,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" />
   <img src="https://img.shields.io/badge/BouncyCastle-ECDSA-orange?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/GSON-2.10.1-47A248?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/JUnit-5.10-25A162?style=for-the-badge&logo=junit5&logoColor=white" />
   <img src="https://img.shields.io/badge/P2P-Java_Sockets-blue?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Proof--of--Work-SHA--256-informational?style=for-the-badge" />
 </p>
@@ -30,8 +28,8 @@ A Bitcoin-style blockchain engine built from scratch in Java, implementing the *
 | Full Chain Validation | ✅ |
 | 2-Node P2P Network (Java Sockets) | ✅ |
 | 4-Layer Architecture (SRP) | ✅ |
-| Swing GUI Dashboard | ✅ |
-| JUnit 5 Test Suite (8 cases) | ✅ |
+
+
 
 ---
 
@@ -122,34 +120,65 @@ Wallet → sendFunds() → Mempool (fee-sorted) → MiningEngine.mineNextBlock()
 
 ### 4-Layer Design (Single Responsibility Principle)
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Dashboard.java                     │
-│         Swing GUI — live balances, mempool,          │
-│         difficulty, block height, mine/send controls │
-└──────────────────────┬──────────────────────────────┘
+```   
+
+┌─────────────────────────────────────────────────────────────────┐
+│  LAYER 1 · PRESENTATION                                         │
+│                                                                 │
+│   Dashboard.java                                                │
+│   Swing GUI · live balances · mempool count · difficulty        │
+│   block height · send/mine/validate controls · activity log     │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ reads BlockchainState · calls MiningEngine
+                            │ calls ChainValidator · holds Node refs
+┌───────────────────────────▼─────────────────────────────────────┐
+│  LAYER 2 · ORCHESTRATION                                        │
+│                                                                 │
+│   Noob.java                                                     │
+│   main() only · genesis bootstrap · simulation sequence         │
+│   wires wallets → network → GUI · shutdown hook                 │
+└──────┬────────────────┬──────────────────┬───────────────────── ┘
+       │                │                  │
+       ▼                ▼                  ▼
+┌─────────────┐  ┌─────────────┐  ┌───────────────────────────────┐
+│  LAYER 3 · SERVICES  (business logic — no shared state)         │
+├─────────────┤  ├─────────────┤  ├───────────────────────────────┤
+│BlockchainS..│  │MiningEngine │  │  ChainValidator               │
+│             │  │             │  │                               │
+│ blockchain[]│  │mineNextBlock│  │  isChainValid()               │
+│ UTXOs map   │  │createCoinbase  │  tempUTXOs replay             │
+│ mempool[]   │  │sortByFee    │  │  4-rule validation:           │
+│ walletA/B   │  │adjustDiff.. │  │  hash · chain · PoW · UTXO   │
+│ difficulty  │  │fee aggregat.│  │  read-only · no side effects  │
+│ constants   │  │             │  │                               │
+└──────┬──────┘  └──────┬──────┘  └───────────────────────────────┘
+       │                │
+       │       ┌────────┘
+       │       │
+┌──────▼───────▼────────────────────────────────────────────────────┐
+│  LAYER 3b · NETWORK  (P2P — runs on background threads)           │
+│                                                                    │
+│   NetworkManager.java          Node.java                          │
+│   createNode() · connectPeers  ServerSocket listener              │
+│   seedAll() · startAll()       synchronized receiveBlock()        │
+│   stopAll() · consensus check  broadcast() · retry logic          │
+│   Facade over Node instances   localBlockchain · localUTXOs       │
+└──────────────────────┬─────────────────────────────────────────────┘
                        │
-┌──────────────────────▼──────────────────────────────┐
-│                    Noob.java                         │
-│    Orchestration only — genesis setup, simulation    │
-│    Wires wallets, nodes, network, GUI                │
-└───────┬──────────────┬───────────────┬──────────────┘
-        │              │               │
-┌───────▼──────┐ ┌─────▼───────┐ ┌────▼───────────────┐
-│BlockchainState│ │MiningEngine │ │  ChainValidator     │
-│  blockchain[] │ │mineNextBlock│ │  isChainValid()     │
-│  UTXOs map    │ │createCoinbase│ │  4-rule validation  │
-│  mempool[]    │ │adjustDifficulty│ │  per-block checks  │
-│  wallets      │ │fee aggregation│ └────────────────────┘
-│  parameters   │ └─────────────┘
-└───────────────┘
-        │
-┌───────▼──────────────────────────────────────────────┐
-│                  Core Data Classes                    │
-│   Block · Transaction · TransactionInput              │
-│   TransactionOutput · Wallet · StringUtil             │
-│   Node · NetworkManager                              │
-└───────────────────────────────────────────────────────┘
+┌──────────────────────▼─────────────────────────────────────────────┐
+│  LAYER 4 · CORE DATA  (data classes + crypto utility)              │
+│                                                                     │
+│  Block              Transaction         TransactionInput           │
+│  hash chain         UTXO lifecycle      UTXO pointer               │
+│  nonce · PoW        sign · verify       two-phase resolve          │
+│  merkleRoot         conservation law    double-spend guard         │
+│  per-block diff     Merkle tree                                    │
+│                                                                     │
+│  TransactionOutput  Wallet              StringUtil                 │
+│  UTXO data class    ECDSA keypair       SHA-256 · ECDSA            │
+│  isMine() · ID      getBalance()        Base64 · toCoins()         │
+│  satoshi value      sendFunds()         crypto utility belt        │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -170,29 +199,15 @@ src/
 ├── TransactionOutput.java  ← UTXO output: recipient, value (satoshis), ID
 ├── Wallet.java             ← ECDSA keypair, balance scan, sendFunds(value, fee)
 ├── StringUtil.java         ← SHA-256, ECDSA sign/verify, Base64, toCoins()
-└── Dashboard.java          ← Swing GUI: live stats, direction/miner combos, log area
-
-
 ```
-
----
-
-
 ---
 
 ## ⚙️ Requirements
 
 - Java JDK 17+
 - BouncyCastle `bcprov-jdk15on-1.70`
-- GSON `2.10.1`
-- JUnit Jupiter `5.10.0` (test scope)
-
-
 ```
-
----
-
-## 🚀 How to Run
+##  How to Run
 
 ```bash
 # 1. Clone
@@ -204,15 +219,10 @@ mvn install
 
 # 3. Run simulation
 mvn exec:java -Dexec.mainClass="Noob"
-# Opens Swing Dashboard GUI + prints full P2P lifecycle to console
-# Close the GUI window to shut down nodes cleanly via shutdown hook
-
+prints full P2P lifecycle to console
 ```
-
 ---
-
 ## 📊 Sample Output
-
 ```
 Block Mined!!! : 000429f7a717c22b...
 Node 1 → localhost:6002 ✓

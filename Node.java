@@ -2,26 +2,19 @@ import java.io.*;
 import java.net.*;
 import java.sql.SQLOutput;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
-// Every node is Both server(listens to Block) and a client(broadcast block)
-// Two nodes running =  a real p2p network
-
 public class Node {
+    public final int port;
+    private final List<String> peerAddresses;
+    private final String nodeId;
 
-    public final int port;                      // this node listen on this port
-    private final List<String> peerAddresses;    // "host:port" of peers to connect to
-    private final String nodeId;                 // Unique identifier for this node (could be a UUID or derived from port)
     private ServerSocket serverSocket;
     private boolean running = false;
 
     public ArrayList<Block> localBlockchain = new ArrayList<>();
-    public java.util.HashMap<String, TransactionOutput> localUTXOs = new java.util.HashMap<>();
-
-
-
-    // Each node maintains its own copy of the blockchain and mempool
-    // This is the point - two separate nodes can have different states until they sync
+    public HashMap<String, TransactionOutput> localUTXOs = new HashMap<>();
 
     public Node(String nodeId, int port){
         this.nodeId = nodeId;
@@ -35,15 +28,13 @@ public class Node {
         System.out.println("Node " + nodeId + " added peer: " + host + ":" + peerPort);
     }
 
-    // Seed the node with an already built genesis block
     // Both node must start from same genesis or they will never agree
-    public void seedGenesis(Block genesis, java.util.HashMap<String, TransactionOutput> genesisUTXOs){
+    public void seedGenesis(Block genesis, HashMap<String, TransactionOutput> genesisUTXOs){
         localBlockchain.add(genesis);
         localUTXOs.putAll(genesisUTXOs);
         System.out.println("Node " + nodeId + " seeded with genesis block.");
     }
 
-    // Server side start listening for incoming block on a background thread
     public void start(){
         running = true;
         new Thread(this::listen, nodeId + "listener").start();
@@ -57,14 +48,12 @@ public class Node {
         } catch (IOException ignored) {}
 
     }
-
-        // Runs forever on a background thread, so we need to interrupt it when stopping the node
+    //
         private void listen(){
             try{
                 serverSocket = new ServerSocket(port);
                 while(running){
                     try{
-                        // accept block until a peer connects
                         Socket connection = serverSocket.accept();
 
                         // Handle each connection on its own thread so we can process multiple blocks at the same time
@@ -79,16 +68,13 @@ public class Node {
     }
 
     // Called when peer send us a block
-    // Deserialize validate append
     private void handleIncoming(Socket connection){
         try (ObjectInputStream in = new ObjectInputStream (connection.getInputStream())){
 
             // Deserialize the Block object sent by the peer
             Block receivedBlock = (Block) in.readObject();
             System.out.println("Node " + nodeId + " received block: " + receivedBlock.hash.substring(0,12));
-
             receivedBlock(receivedBlock);
-
             } catch (Exception e){
             System.out.println("Node " + nodeId + " failed to handle incoming block: " + e.getMessage());
         }
@@ -96,20 +82,14 @@ public class Node {
 
     // Only one thread at a time can modify the blockchain and mempool, so we synchronize this method
     private synchronized void receivedBlock(Block block){
-
-        // Previous hash must match our tip
-        // if does not match this block does not extend our chain
-
         if(localBlockchain.isEmpty()){
             System.out.println("Node " + nodeId + " has no genesis block, cannot accept new blocks.");
             return;
         }
-
-        Block tip = localBlockchain.get(localBlockchain.size() - 1);
+        Block tip = localBlockchain.getLast();
         if(!block.previousHash.equals(tip.hash)){
             System.out.println("Node " + nodeId + " rejected block: previous hash does not match our tip.");
-
-            System.out.println("Expetcted: " + tip.hash.substring(0,12));
+            System.out.println("Expected: " + tip.hash.substring(0,12));
             System.out.println("Received: " + block.previousHash.substring(0,12));
             return;
         }
@@ -119,7 +99,6 @@ public class Node {
         if(!block.hash.substring(0, block.difficulty).equals(target)){
             System.out.println("Node " + nodeId + " rejected block: hash does not meet difficulty target.");
             return;
-
         }
 
         // Recalculate hash must match stored hash
@@ -143,19 +122,15 @@ public class Node {
 
         // Update local UTXO
         updateLocalUTXOs(block);
-
         System.out.println("Node " + nodeId + " accepted block: " + "local height: "+localBlockchain.size());
     }
 
     void updateLocalUTXOs(Block block){
         for(int t= 0; t < block.transactions.size(); t++){
             Transaction tx = block.transactions.get(t);
-
-            // Add all output as new UTXOs
             for(TransactionOutput out: tx.outputs){
                 localUTXOs.put(out.id, out);
             }
-
             if(t != 0){
                 for(TransactionInput input: tx.inputs){
                     localUTXOs.remove(input.transactionOutputId);
@@ -164,8 +139,9 @@ public class Node {
         }
     }
 
-    // CLIENT SIDE
     // this is called after node mines a block and sends the block to every known peer
+    // Real bitcoin network propgation model: a node that mines a block broadcast to all 8 outbound peers simultaneiusly. Each peer validates and forwards to their peers.
+    // Exponential propagation - a block typically reaches 50% of the network in 1 second
     public void broadcast(Block block){
         System.out.println("Node " + nodeId + " broadcasting block: " + peerAddresses.size());
         for(String peer: peerAddresses){
@@ -187,6 +163,7 @@ public class Node {
                 out.flush();
                 System.out.println("Node " + nodeId + " successfully sent block to " + address);
                 return;
+
             } catch (ConnectException e) {
                 attempts++;
                 System.out.println("Node " + nodeId + " failed to send block to " + address + " (attempt " + attempts + "): " + e.getMessage());
@@ -211,7 +188,7 @@ public class Node {
         }
         public Block getLocalChainTip () {
             if (localBlockchain.isEmpty()) return null;
-            return localBlockchain.get(localBlockchain.size() - 1);
+            return localBlockchain.getLast();
         }
         public void printStatus () {
             System.out.println("Node " + nodeId + " status: height=" + localBlockchain.size() + ", peers=" + peerAddresses.size());

@@ -1,12 +1,7 @@
 import java.util.ArrayList;
 import java.util.HashMap;
 
-// Validate chain Integrity
-// Read BlockchainState and Return boolean and failure reason
-
-
 public class ChainValidator {
-
     public static boolean isChainValid(){
 
         if(BlockchainState.blockchain.size() < 2){
@@ -17,7 +12,6 @@ public class ChainValidator {
         // We replay the whole chain and validate each block and transaction
         HashMap<String, TransactionOutput> tempUTXOs = new HashMap<>();
         tempUTXOs.put(BlockchainState.genesisTransaction.outputs.get(0).id, BlockchainState.genesisTransaction.outputs.get(0));
-
 
         for(int i  = 1; i < BlockchainState.blockchain.size(); i++){
             Block current = BlockchainState.blockchain.get(i);
@@ -31,7 +25,7 @@ public class ChainValidator {
 
             // Check 2: Previous hash chain is intact
             if(!previous.hash.equals(current.previousHash)){
-                fail("chain breal previous hash mismatch",i,-1);
+                fail("chain broken: previous hash mismatch",i,-1);;
                 return false;
             }
 
@@ -47,7 +41,6 @@ public class ChainValidator {
             for(int t = 0; t < current.transactions.size(); t++){
                 Transaction tx = current.transactions.get(t);
 
-                // we have index 0 in Coinbase
                 if( t == 0 && tx.sender == null){
                     for(TransactionOutput out: tx.outputs){
                         tempUTXOs.put(out.id,out);
@@ -55,19 +48,17 @@ public class ChainValidator {
                     continue;
                 }
 
-                // Signature must be valid
                 if(!tx.verifySignature()){
                     fail("Invalid Signature",i,t);
                     return false;
                 }
 
-                // Inputs = Output + fees(Bitcoin conservative law
                 if(tx.getInputsValue() != tx.getOutputsValue() + tx.fee){
                     fail("Input/output/fee mismatch", i,t);
                     return false;
                 }
 
-                // Input must reference a real unspent output
+
                 for(TransactionInput input : tx.inputs){
                     TransactionOutput referenced = tempUTXOs.get(
                             input.transactionOutputId
@@ -84,7 +75,6 @@ public class ChainValidator {
                     tempUTXOs.remove(input.transactionOutputId);
                 }
 
-                // Add new Output to temp UTXO set
                 for(TransactionOutput out: tx.outputs){
                     tempUTXOs.put(out.id,out);
                 }

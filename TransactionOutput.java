@@ -4,7 +4,6 @@ import java.io.Serializable;
 public class TransactionOutput implements Serializable {
     public static final long serialVersionUID = 1L;
 
-
     public String id;
     public PublicKey recipient;
     public long value;
@@ -17,7 +16,6 @@ public class TransactionOutput implements Serializable {
         this.id = StringUtil.applySha256(StringUtil.getStringFromKey(recipient)+Long.toString(value)+parentTransactionId);
     }
 
-    // Check if coin belongs to you
     public boolean isMine(PublicKey publicKey) {
         return (publicKey.equals(recipient));
     }
